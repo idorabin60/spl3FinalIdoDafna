@@ -7,6 +7,8 @@
 #include "../include/StompFrame.h"
 #include "../include/StompProtocol.h"
 #include "../include/ConnectionHandler.h"
+#include <mutex>
+#include <condition_variable>
 
 // Atomic flag to terminate the threads gracefully
 std::atomic<bool> running(true);
@@ -16,6 +18,9 @@ ConnectionHandler *connectionHandler = nullptr;
 
 // Declare receiver thread globally
 std::thread receiverThread;
+std::mutex mtx;
+std::condition_variable cv;
+bool messageReceived = false; // Flag to indicate if a message is received
 
 // Receiving Thread: Listens for messages from the server
 void receivingThread(StompProtocol &protocol)
@@ -32,11 +37,13 @@ void receivingThread(StompProtocol &protocol)
 			running = false; // Signal to terminate
 			break;
 		}
-		std::cout << "never reaches here";
 		// Parse and process the server response
 		StompFrame frame = StompFrame::parse(serverMessage);
 		std::cout << "Received from server: " << frame.serialize() << std::endl;
-		protocol.processServerFrame(frame); // Handle the frame
+		protocol.processServerFrame(frame);
+		std::unique_lock<std::mutex> lock(mtx);
+		messageReceived = true;
+		cv.notify_one(); // Notify the input thread
 	}
 	std::cout << "Receiving thread terminated." << std::endl;
 }
@@ -50,6 +57,7 @@ void inputThread()
 
 	while (running)
 	{
+		std::cout << "please enter a command\n";
 		std::getline(std::cin, userInput); // Read the user's input
 
 		if (userInput.empty())
@@ -62,49 +70,56 @@ void inputThread()
 		std::string firstWord;
 		inputStream >> firstWord; // Extract the first word
 
-		if (firstWord == "login" && !isLoggedIn)
+		if (firstWord == "login")
 		{
-			std::string hostPort, username, password;
-			inputStream >> hostPort >> username >> password;
-
-			// Regex to validate the format {host:port}
-			std::regex hostPortRegex(R"(^([a-zA-Z0-9.-]+):(\d+)$)");
-			std::smatch match;
-			if (std::regex_match(hostPort, match, hostPortRegex) && !username.empty() && !password.empty())
+			if (!isLoggedIn)
 			{
-				std::string host = match[1];	  // Extract host
-				std::string port = match[2];	  // Extract port
-				int portNumber = std::stoi(port); // Convert port string to integer
+				std::string hostPort, username, password;
+				inputStream >> hostPort >> username >> password;
 
-				// Create a new ConnectionHandler
-				connectionHandler = new ConnectionHandler(host, portNumber);
-				if (connectionHandler->connect())
+				// Regex to validate the format {host:port}
+				std::regex hostPortRegex(R"(^([a-zA-Z0-9.-]+):(\d+)$)");
+				std::smatch match;
+				if (std::regex_match(hostPort, match, hostPortRegex) && !username.empty() && !password.empty())
 				{
-					std::cout << "Connected successfully to " << host << " on port " << portNumber << std::endl;
+					std::string host = match[1];	  // Extract host
+					std::string port = match[2];	  // Extract port
+					int portNumber = std::stoi(port); // Convert port string to integer
 
-					// Start the Receiving Thread
-					if (receiverThread.joinable())
+					// Create a new ConnectionHandler
+					connectionHandler = new ConnectionHandler(host, portNumber);
+					if (connectionHandler->connect())
 					{
-						receiverThread.join(); // Wait for any existing thread to finish
-					}
-					receiverThread = std::thread(receivingThread, std::ref(protocol));
-					isLoggedIn = true;
+						std::cout << "Connected successfully to " << host << " on port " << portNumber << std::endl;
 
-					// Send the login command
-					std::string messageToBeSent = protocol.processCommand(userInput).serialize();
-					std::cout << messageToBeSent;
-					connectionHandler->sendFrameAscii(messageToBeSent, '\0');
+						// Start the Receiving Thread
+						if (receiverThread.joinable())
+						{
+							receiverThread.join(); // Wait for any existing thread to finish
+						}
+						receiverThread = std::thread(receivingThread, std::ref(protocol));
+						isLoggedIn = true;
+
+						// Send the login command
+						std::string messageToBeSent = protocol.processCommand(userInput).serialize();
+						std::cout << messageToBeSent;
+						connectionHandler->sendFrameAscii(messageToBeSent, '\0');
+					}
+					else
+					{
+						std::cerr << "Failed to connect to " << host << " on port " << portNumber << std::endl;
+						delete connectionHandler;
+						connectionHandler = nullptr;
+					}
 				}
 				else
 				{
-					std::cerr << "Failed to connect to " << host << " on port " << portNumber << std::endl;
-					delete connectionHandler;
-					connectionHandler = nullptr;
+					std::cout << "login command needs 3 args: {host:port} {username} {password}" << std::endl;
 				}
 			}
 			else
 			{
-				std::cout << "Invalid format. Expected: login {host:port} {username} {password}" << std::endl;
+				std::cout << "user already logedin";
 			}
 		}
 		else if (firstWord == "exit")
@@ -121,13 +136,10 @@ void inputThread()
 		{
 			std::cout << "Unknown command: " << firstWord << std::endl;
 		}
-	}
-
-	// Cleanup
-	if (connectionHandler)
-	{
-		delete connectionHandler;
-		connectionHandler = nullptr;
+		std::cout << "dafna cute";
+		std::unique_lock<std::mutex> lock(mtx);
+		cv.wait(lock, []
+				{ return messageReceived || !running; });
 	}
 }
 
