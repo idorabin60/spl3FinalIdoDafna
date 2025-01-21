@@ -80,6 +80,7 @@ bool ConnectionHandler::getFrameAscii(std::string &frame, char delimiter) {
 	try {
 		do {
 			if (!getBytes(&ch, 1)) {
+				std::cout<<"asjdalkjs;dj;asdkj;asdkj;asd";
 				return false;
 			}
 			if (ch != '\0')

@@ -2,13 +2,13 @@
 #include <thread>
 #include <string>
 #include <atomic>
-#include <sstream> // For std::istringstream
+#include <sstream>
 #include <regex>
+#include <mutex>
+#include <condition_variable>
 #include "../include/StompFrame.h"
 #include "../include/StompProtocol.h"
 #include "../include/ConnectionHandler.h"
-#include <mutex>
-#include <condition_variable>
 
 // Atomic flag to terminate the threads gracefully
 std::atomic<bool> running(true);
@@ -20,7 +20,8 @@ ConnectionHandler *connectionHandler = nullptr;
 std::thread receiverThread;
 std::mutex mtx;
 std::condition_variable cv;
-bool messageReceived = false; // Flag to indicate if a message is received
+bool messageReceived = false;			   // Flag to indicate if a message is received
+std::atomic<bool> receiptProcessed(false); // To track receipt handling
 
 // Receiving Thread: Listens for messages from the server
 void receivingThread(StompProtocol &protocol)
@@ -29,17 +30,19 @@ void receivingThread(StompProtocol &protocol)
 	{
 		std::string serverMessage;
 
-		// Wait for a message from the serve
-
 		if (!connectionHandler->getLine(serverMessage))
 		{
-			std::cerr << "Error: Failed to receive data from the server." << std::endl;
+			std::cout << "ido look here";
 			running = false; // Signal to terminate
 			break;
 		}
+
 		// Parse and process the server response
 		StompFrame frame = StompFrame::parse(serverMessage);
-		std::cout << "Received from server: " << frame.serialize() << std::endl;
+		if (frame.getCommand() == "RECEIPT")
+		{
+			receiptProcessed = true; // Indicate receipt was processed
+		}
 		protocol.processServerFrame(frame);
 		std::unique_lock<std::mutex> lock(mtx);
 		messageReceived = true;
@@ -77,32 +80,25 @@ void inputThread()
 				std::string hostPort, username, password;
 				inputStream >> hostPort >> username >> password;
 
-				// Regex to validate the format {host:port}
 				std::regex hostPortRegex(R"(^([a-zA-Z0-9.-]+):(\d+)$)");
 				std::smatch match;
 				if (std::regex_match(hostPort, match, hostPortRegex) && !username.empty() && !password.empty())
 				{
-					std::string host = match[1];	  // Extract host
-					std::string port = match[2];	  // Extract port
-					int portNumber = std::stoi(port); // Convert port string to integer
+					std::string host = match[1];
+					std::string port = match[2];
+					int portNumber = std::stoi(port);
 
-					// Create a new ConnectionHandler
 					connectionHandler = new ConnectionHandler(host, portNumber);
 					if (connectionHandler->connect())
 					{
-						std::cout << "Connected successfully to " << host << " on port " << portNumber << std::endl;
-
-						// Start the Receiving Thread
 						if (receiverThread.joinable())
 						{
-							receiverThread.join(); // Wait for any existing thread to finish
+							receiverThread.join();
 						}
 						receiverThread = std::thread(receivingThread, std::ref(protocol));
 						isLoggedIn = true;
 
-						// Send the login command
 						std::string messageToBeSent = protocol.processCommand(userInput).serialize();
-						std::cout << messageToBeSent;
 						connectionHandler->sendFrameAscii(messageToBeSent, '\0');
 					}
 					else
@@ -119,39 +115,86 @@ void inputThread()
 			}
 			else
 			{
-				std::cout << "user already logedin";
+				std::cout << "User already logged in." << std::endl;
 			}
 		}
 		else if (firstWord == "exit")
 		{
 			std::cout << "Exiting program..." << std::endl;
-			running = false; // Signal to terminate
+			running = false;
 			if (receiverThread.joinable())
 			{
 				receiverThread.join();
 			}
 			break;
 		}
+		else if (firstWord == "join")
+		{
+			std::istringstream wordStream(userInput);
+			std::string command, channel;
+
+			// Extract the first and second words
+			wordStream >> command >> channel;
+
+			// Ensure exactly two words exist
+			if (!command.empty() && !channel.empty() && wordStream.eof()) // Check if there are exactly two words
+			{
+				std::string messageToBeSent = protocol.processCommand(userInput).serialize();
+				connectionHandler->sendFrameAscii(messageToBeSent, '\0');
+
+				std::unique_lock<std::mutex> lock(mtx);
+				cv.wait(lock, []
+						{ return messageReceived || !running; });
+				messageReceived = false; // Reset the flag
+
+				receiptProcessed = false; // Reset after handling
+
+				std::cout << "join successful " << channel << std::endl;
+			}
+			else
+			{
+				std::cout << "Error: 'join' command must have exactly two words." << std::endl;
+			}
+		}
+	else if (firstWord == "report") {
+    std::string filePath;
+    inputStream >> filePath;
+
+    // Process the file and get the list of frames
+    std::vector<StompFrame> frames = protocol.processReportCommand(filePath);
+
+    // Send each frame
+    for (const StompFrame &frame : frames) {
+        std::string serializedFrame = frame.serialize();
+        std::cout << "Sending frame:\n" << serializedFrame << std::endl;
+
+        connectionHandler->sendFrameAscii(serializedFrame, '\0');
+
+        // Wait for acknowledgment (if needed)
+        std::unique_lock<std::mutex> lock(mtx);
+        cv.wait(lock, []
+                { return messageReceived || !running; });
+        messageReceived = false; // Reset the flag
+
+        receiptProcessed = false; // Reset after handling
+    }
+
+    std::cout << "All events from file " << filePath << " have been sent." << std::endl;
+}
+
+
 		else
 		{
 			std::cout << "Unknown command: " << firstWord << std::endl;
 		}
-		std::cout << "dafna cute";
-		std::unique_lock<std::mutex> lock(mtx);
-		cv.wait(lock, []
-				{ return messageReceived || !running; });
 	}
 }
 
 int main(int argc, char *argv[])
 {
-	// Start the Input Thread
 	std::thread inputThreadWorker(inputThread);
-
-	// Wait for the Input Thread to finish
 	inputThreadWorker.join();
 
-	// Ensure the Receiving Thread is joined
 	if (receiverThread.joinable())
 	{
 		receiverThread.join();

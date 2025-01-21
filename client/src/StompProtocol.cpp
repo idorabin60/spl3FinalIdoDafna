@@ -1,8 +1,9 @@
 #include "StompProtocol.h"
+#include "event.h"
 #include <iostream>
 #include <sstream>
 
-StompProtocol::StompProtocol() : loggedIn(false), username("") {}
+StompProtocol::StompProtocol() : loggedIn(false), username(""), reciptId(0) {}
 
 bool StompProtocol::isLoggedIn() const
 {
@@ -54,7 +55,7 @@ StompFrame StompProtocol::processCommand(const std::string &command)
         frame.setCommand("SUBSCRIBE");
         frame.addHeader("destination", "/" + channel);
         frame.addHeader("id", subscriptionId);
-        frame.addHeader("receipt", "join-" + subscriptionId);
+        frame.addHeader("receipt", std::to_string(incremeantAndGetReciptId()));
 
         subscriptions[channel] = subscriptionId;
     }
@@ -73,16 +74,7 @@ StompFrame StompProtocol::processCommand(const std::string &command)
             subscriptions.erase(it);
         }
     }
-    else if (action == "report")
-    {
-        std::string destination, messageBody;
-        iss >> destination;
-        std::getline(iss, messageBody);
-
-        frame.setCommand("SEND");
-        frame.addHeader("destination", "/" + destination);
-        frame.setBody(messageBody);
-    }
+   
     else if (action == "logout")
     {
         frame.setCommand("DISCONNECT");
@@ -98,7 +90,7 @@ void StompProtocol::processServerFrame(const StompFrame &frame)
 
     if (command == "CONNECTED")
     {
-        std::cout << "Connected to server. Version: " << frame.getHeader("version") << std::endl;
+        std::cout << "LogIn sucseesful" << std::endl;
     }
     else if (command == "MESSAGE")
     {
@@ -112,4 +104,45 @@ void StompProtocol::processServerFrame(const StompFrame &frame)
     {
         std::cerr << "Error: " << frame.getBody() << std::endl;
     }
+}
+std::vector<StompFrame> StompProtocol::processReportCommand(const std::string &filePath) {
+    std::vector<StompFrame> frames;
+
+    try {
+        names_and_events parsedData = parseEventsFile(filePath);
+
+        for (const Event &event : parsedData.events) {
+            StompFrame frame;
+            frame.setCommand("SEND");
+
+            // Correct header formatting
+            frame.addHeader("destination", " / " + parsedData.channel_name);
+            frame.addHeader("user", " " + username);
+            frame.addHeader("city", " " + event.get_city());
+            frame.addHeader("event name", " " + event.get_name());
+            frame.addHeader("date time", " " + std::to_string(event.get_date_time()));
+
+            // General information as multiline
+            std::ostringstream generalInfo;
+            generalInfo << "active : " << (event.get_general_information().at("active") == "true" ? "true" : "false") << "\n";
+            generalInfo << "forces arrival at scene : " << (event.get_general_information().at("forces arrival at scene") == "true" ? "true" : "false") << "\n";
+            frame.addHeader("general information", "\n" + generalInfo.str());
+
+            // Description as the body
+            frame.setBody("description :\n" + event.get_description());
+
+            frames.push_back(frame);
+        }
+    } catch (const std::exception &e) {
+        std::cerr << "Error processing report: " << e.what() << std::endl;
+    }
+
+    return frames;
+}
+
+
+
+int StompProtocol::incremeantAndGetReciptId()
+{
+    return reciptId++;
 }

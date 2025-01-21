@@ -41,22 +41,24 @@ std::string StompFrame::getBody() const
 }
 
 // Serialize the frame into a string for transmission
-std::string StompFrame::serialize() const
-{
+std::string StompFrame::serialize() const {
     std::ostringstream oss;
 
-    // Add the command
+    // Add command
     oss << command << "\n";
 
-    // Add the headers
-    for (const auto &header : headers)
-    {
+    // Add headers
+    for (const auto &header : headers) {
         oss << header.first << ":" << header.second << "\n";
     }
 
-    // Add a blank line and then the body
-    oss << "\n"
-        << body << "\0";
+    // Add blank line between headers and body
+    oss << "\n";
+
+    // Add body
+    oss << body;
+
+  
 
     return oss.str();
 }
