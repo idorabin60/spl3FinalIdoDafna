@@ -78,10 +78,9 @@ void inputThread()
 					connectionHandler = new ConnectionHandler(host, portNumber);
 					if (connectionHandler->connect())
 					{
-						std::cout<<"lock here 1";
+					
 						if (receiverThread.joinable())
-						{						std::cout<<"lock here 1";
-
+						{
 							receiverThread.join();
 						}
 						receiverThread = std::thread(receivingThread, std::ref(protocol));
