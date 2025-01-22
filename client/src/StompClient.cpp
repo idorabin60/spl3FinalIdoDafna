@@ -156,32 +156,34 @@ void inputThread()
 				std::cout << "Error: 'join' command must have exactly two words." << std::endl;
 			}
 		}
-	else if (firstWord == "report") {
-    std::string filePath;
-    inputStream >> filePath;
+		else if (firstWord == "report")
+		{
+			std::string filePath;
+			inputStream >> filePath;
 
-    // Process the file and get the list of frames
-    std::vector<StompFrame> frames = protocol.processReportCommand(filePath);
+			// Process the file and get the list of frames
+			std::vector<StompFrame> frames = protocol.processReportCommand(filePath);
 
-    // Send each frame
-    for (const StompFrame &frame : frames) {
-        std::string serializedFrame = frame.serialize();
-        std::cout << "Sending frame:\n" << serializedFrame << std::endl;
+			// Send each frame
+			for (const StompFrame &frame : frames)
+			{
+				std::string serializedFrame = frame.serialize2();
+				std::cout << "Sending frame:\n"
+						  << serializedFrame << std::endl;
 
-        connectionHandler->sendFrameAscii(serializedFrame, '\0');
+				connectionHandler->sendFrameAscii(serializedFrame, '\0');
 
-        // Wait for acknowledgment (if needed)
-        std::unique_lock<std::mutex> lock(mtx);
-        cv.wait(lock, []
-                { return messageReceived || !running; });
-        messageReceived = false; // Reset the flag
+				// Wait for acknowledgment (if needed)
+				std::unique_lock<std::mutex> lock(mtx);
+				cv.wait(lock, []
+						{ return messageReceived || !running; });
+				messageReceived = false; // Reset the flag
 
-        receiptProcessed = false; // Reset after handling
-    }
+				receiptProcessed = false; // Reset after handling
+			}
 
-    std::cout << "All events from file " << filePath << " have been sent." << std::endl;
-}
-
+			std::cout << "All events from file " << filePath << " have been sent." << std::endl;
+		}
 
 		else
 		{

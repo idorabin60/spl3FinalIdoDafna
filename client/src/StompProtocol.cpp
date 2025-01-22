@@ -74,7 +74,7 @@ StompFrame StompProtocol::processCommand(const std::string &command)
             subscriptions.erase(it);
         }
     }
-   
+
     else if (action == "logout")
     {
         frame.setCommand("DISCONNECT");
@@ -87,6 +87,7 @@ StompFrame StompProtocol::processCommand(const std::string &command)
 void StompProtocol::processServerFrame(const StompFrame &frame)
 {
     const std::string &command = frame.getCommand();
+    std::cout << frame.serialize();
 
     if (command == "CONNECTED")
     {
@@ -105,42 +106,66 @@ void StompProtocol::processServerFrame(const StompFrame &frame)
         std::cerr << "Error: " << frame.getBody() << std::endl;
     }
 }
-std::vector<StompFrame> StompProtocol::processReportCommand(const std::string &filePath) {
+std::vector<StompFrame> StompProtocol::processReportCommand(const std::string &filePath)
+{
     std::vector<StompFrame> frames;
 
-    try {
+    try
+    {
         names_and_events parsedData = parseEventsFile(filePath);
 
-        for (const Event &event : parsedData.events) {
+        for (const Event &event : parsedData.events)
+        {
             StompFrame frame;
             frame.setCommand("SEND");
 
-            // Correct header formatting
-            frame.addHeader("destination", " / " + parsedData.channel_name);
-            frame.addHeader("user", " " + username);
-            frame.addHeader("city", " " + event.get_city());
-            frame.addHeader("event name", " " + event.get_name());
-            frame.addHeader("date time", " " + std::to_string(event.get_date_time()));
+            // Add properly formatted headers
+            frame.addHeader("destination", "/" + parsedData.channel_name);
+            frame.addHeader("user", username);
+            frame.addHeader("city", event.get_city());
+            frame.addHeader("event name", event.get_name());
+            frame.addHeader("date time", std::to_string(event.get_date_time()));
 
-            // General information as multiline
+            // Format the general information
             std::ostringstream generalInfo;
-            generalInfo << "active : " << (event.get_general_information().at("active") == "true" ? "true" : "false") << "\n";
-            generalInfo << "forces arrival at scene : " << (event.get_general_information().at("forces arrival at scene") == "true" ? "true" : "false") << "\n";
-            frame.addHeader("general information", "\n" + generalInfo.str());
+            const auto &info = event.get_general_information();
 
-            // Description as the body
-            frame.setBody("description :\n" + event.get_description());
+            // Add general information fields
+            if (info.find("active") != info.end())
+            {
+                generalInfo << "active: " << (info.at("active") == "true" ? "true" : "false") << "\n";
+            }
+            else
+            {
+                generalInfo << "active: false\n"; // Default if key is missing
+            }
 
+            if (info.find("forces_arrival_at_scene") != info.end())
+            {
+                generalInfo << "forces arrival at scene: " << (info.at("forces_arrival_at_scene") == "true" ? "true" : "false") << "\n";
+            }
+            else
+            {
+                generalInfo << "forces arrival at scene: false\n"; // Default if key is missing
+            }
+
+            // Add general information header
+            frame.addHeader("general information", generalInfo.str());
+
+            // Add the description as the body
+            frame.setBody("description:\n" + event.get_description());
+
+            // Add the frame to the vector
             frames.push_back(frame);
         }
-    } catch (const std::exception &e) {
+    }
+    catch (const std::exception &e)
+    {
         std::cerr << "Error processing report: " << e.what() << std::endl;
     }
 
     return frames;
 }
-
-
 
 int StompProtocol::incremeantAndGetReciptId()
 {

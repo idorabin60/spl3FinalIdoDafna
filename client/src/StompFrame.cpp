@@ -41,14 +41,16 @@ std::string StompFrame::getBody() const
 }
 
 // Serialize the frame into a string for transmission
-std::string StompFrame::serialize() const {
+std::string StompFrame::serialize() const
+{
     std::ostringstream oss;
 
     // Add command
     oss << command << "\n";
 
     // Add headers
-    for (const auto &header : headers) {
+    for (const auto &header : headers)
+    {
         oss << header.first << ":" << header.second << "\n";
     }
 
@@ -57,8 +59,6 @@ std::string StompFrame::serialize() const {
 
     // Add body
     oss << body;
-
-  
 
     return oss.str();
 }
@@ -101,4 +101,26 @@ StompFrame StompFrame::parse(const std::string &rawFrame)
 
     frame.setBody(body);
     return frame;
+}
+// Serialize the frame into a string for transmission
+std::string StompFrame::serialize2() const
+{
+    std::ostringstream oss;
+
+    // Add command
+    oss << command << "\n";
+
+    // Add headers with no extra spaces
+    for (const auto &header : headers)
+    {
+        oss << header.first << ": " << header.second << "\n";
+    }
+
+    // Add blank line between headers and body
+    oss << "\n";
+
+    // Add body
+    oss << body;
+
+    return oss.str();
 }

@@ -27,7 +27,9 @@ public:
     std::string getBody() const;
 
     // Serialization and Parsing
-    std::string serialize() const;                        // Convert the frame to a string for transmission
+    std::string serialize() const;
+    std::string serialize2() const;                       // Convert the frame to a string for transmission
+                                                          // Convert the frame to a string for transmission
     static StompFrame parse(const std::string &rawFrame); // Parse a raw frame string into a StompFrame object
 };
 
