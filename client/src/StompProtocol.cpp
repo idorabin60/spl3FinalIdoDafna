@@ -3,7 +3,7 @@
 #include <iostream>
 #include <sstream>
 
-StompProtocol::StompProtocol() : loggedIn(false), username(""), reciptId(0) {}
+StompProtocol::StompProtocol() : loggedIn(false), username(""), reciptId(0), logOutId(-1) {}
 
 bool StompProtocol::isLoggedIn() const
 {
@@ -24,6 +24,22 @@ void StompProtocol::setUsername(const std::string &user)
 {
     username = user;
 }
+int StompProtocol::getLogOutId()
+{
+    return logOutId;
+}
+void StompProtocol::setLogOutId(const int id)
+{
+    logOutId = id;
+}
+int StompProtocol::getReciptId()
+{
+    return reciptId;
+}
+void StompProtocol::setReciptId(const int id)
+{
+    reciptId = id;
+}
 
 StompFrame StompProtocol::processCommand(const std::string &command)
 {
@@ -43,8 +59,9 @@ StompFrame StompProtocol::processCommand(const std::string &command)
         frame.addHeader("host", "stomp.cs.bgu.ac.il");
         frame.addHeader("login", username);
         frame.addHeader("passcode", password);
-
+        incremeantAndGetReciptId();
         setUsername(username);
+        
     }
     else if (action == "join")
     {
@@ -78,34 +95,75 @@ StompFrame StompProtocol::processCommand(const std::string &command)
     else if (action == "logout")
     {
         frame.setCommand("DISCONNECT");
-        frame.addHeader("receipt", "logout");
+        setLogOutId(getReciptId());
+        std::string reciptString = std::to_string(incremeantAndGetReciptId());
+        frame.addHeader("receipt", reciptString);
     }
 
     return frame;
+}
+std::string trim(const std::string &str)
+{
+    size_t first = str.find_first_not_of(" \n\r\t");
+    size_t last = str.find_last_not_of(" \n\r\t");
+    return str.substr(first, (last - first + 1));
+}
+#include <iostream>
+#include <string>
+
+std::string getReceiptId(const std::string &serializedFrame)
+{
+    const std::string key = "receipt-id:"; // The key to search for
+    size_t startPos = serializedFrame.find(key);
+
+    if (startPos == std::string::npos)
+    {
+        // Key not found
+        return "";
+    }
+
+    // Move startPos to the position after "receipt-id:"
+    startPos += key.length();
+
+    // Find the end of the line
+    size_t endPos = serializedFrame.find('\n', startPos);
+
+    // Extract and return the substring
+    return serializedFrame.substr(startPos, endPos - startPos);
 }
 
 void StompProtocol::processServerFrame(const StompFrame &frame)
 {
     const std::string &command = frame.getCommand();
-    std::cout << frame.serialize();
 
-    if (command == "CONNECTED")
+    // Use `find` to check if the command contains the desired keyword
+    if (command.find("CONNECTED") != std::string::npos)
     {
-        std::cout << "LogIn sucseesful" << std::endl;
+        std::cout << "Login successful" << std::endl;
     }
-    else if (command == "MESSAGE")
+    else if (command.find("MESSAGE") != std::string::npos)
     {
-        std::cout << "Message from " << frame.getHeader("destination") << ": " << frame.getBody() << std::endl;
+        std::cout << "Message from server recived " << std::endl;
     }
-    else if (command == "RECEIPT")
+    else if (command.find("RECEIPT") != std::string::npos)
     {
-        std::cout << "Receipt: " << frame.getHeader("receipt-id") << std::endl;
+        std::cout << "Receipt: " << getReceiptId(frame.serialize()) << std::endl;
+        std::cout<<"log out id: "<< getLogOutId() << std::endl;
+        if (std::stoi(getReceiptId(frame.serialize())) == getLogOutId())
+        {
+            setLoggedIn(false);
+        }
     }
-    else if (command == "ERROR")
+    else if (command.find("ERROR") != std::string::npos)
     {
         std::cerr << "Error: " << frame.getBody() << std::endl;
     }
+    else
+    {
+        std::cerr << "Unknown command received: " << command << std::endl;
+    }
 }
+
 std::vector<StompFrame> StompProtocol::processReportCommand(const std::string &filePath)
 {
     std::vector<StompFrame> frames;

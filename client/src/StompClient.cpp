@@ -29,26 +29,14 @@ void receivingThread(StompProtocol &protocol)
 	while (running)
 	{
 		std::string serverMessage;
-
-		if (!connectionHandler->getLine(serverMessage))
+		bool sucsess = connectionHandler->getLine(serverMessage);
+		if (!sucsess)
 		{
-			std::cout << "ido look here";
-			running = false; // Signal to terminate
+			std::cout << "dc";
 			break;
 		}
-
-		// Parse and process the server response
-		StompFrame frame = StompFrame::parse(serverMessage);
-		if (frame.getCommand() == "RECEIPT")
-		{
-			receiptProcessed = true; // Indicate receipt was processed
-		}
-		protocol.processServerFrame(frame);
-		std::unique_lock<std::mutex> lock(mtx);
-		messageReceived = true;
-		cv.notify_one(); // Notify the input thread
+		protocol.processServerFrame(serverMessage);
 	}
-	std::cout << "Receiving thread terminated." << std::endl;
 }
 
 // Input Thread: Handles user commands and sends them to the server
@@ -56,7 +44,6 @@ void inputThread()
 {
 	StompProtocol protocol;
 	std::string userInput;
-	bool isLoggedIn = false;
 
 	while (running)
 	{
@@ -75,7 +62,7 @@ void inputThread()
 
 		if (firstWord == "login")
 		{
-			if (!isLoggedIn)
+			if (!protocol.isLoggedIn())
 			{
 				std::string hostPort, username, password;
 				inputStream >> hostPort >> username >> password;
@@ -91,12 +78,14 @@ void inputThread()
 					connectionHandler = new ConnectionHandler(host, portNumber);
 					if (connectionHandler->connect())
 					{
+						std::cout<<"lock here 1";
 						if (receiverThread.joinable())
-						{
+						{						std::cout<<"lock here 1";
+
 							receiverThread.join();
 						}
 						receiverThread = std::thread(receivingThread, std::ref(protocol));
-						isLoggedIn = true;
+						protocol.setLoggedIn(true);
 
 						std::string messageToBeSent = protocol.processCommand(userInput).serialize();
 						connectionHandler->sendFrameAscii(messageToBeSent, '\0');
@@ -141,14 +130,6 @@ void inputThread()
 			{
 				std::string messageToBeSent = protocol.processCommand(userInput).serialize();
 				connectionHandler->sendFrameAscii(messageToBeSent, '\0');
-
-				std::unique_lock<std::mutex> lock(mtx);
-				cv.wait(lock, []
-						{ return messageReceived || !running; });
-				messageReceived = false; // Reset the flag
-
-				receiptProcessed = false; // Reset after handling
-
 				std::cout << "join successful " << channel << std::endl;
 			}
 			else
@@ -174,15 +155,14 @@ void inputThread()
 				connectionHandler->sendFrameAscii(serializedFrame, '\0');
 
 				// Wait for acknowledgment (if needed)
-				std::unique_lock<std::mutex> lock(mtx);
-				cv.wait(lock, []
-						{ return messageReceived || !running; });
-				messageReceived = false; // Reset the flag
-
-				receiptProcessed = false; // Reset after handling
 			}
 
 			std::cout << "All events from file " << filePath << " have been sent." << std::endl;
+		}
+		else if (firstWord == "logout")
+		{
+			std::string messageToBeSent = protocol.processCommand(userInput).serialize();
+			connectionHandler->sendFrameAscii(messageToBeSent, '\0');
 		}
 
 		else

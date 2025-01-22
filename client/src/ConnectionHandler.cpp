@@ -65,8 +65,13 @@ bool ConnectionHandler::sendBytes(const char bytes[], int bytesToWrite) {
 }
 
 bool ConnectionHandler::getLine(std::string &line) {
-	return getFrameAscii(line, '\n');
+    if (!getFrameAscii(line, '\0')) {
+        std::cerr << "Failed to read a line from the server.\n";
+        return false;
+    }
+    return true;
 }
+
 
 bool ConnectionHandler::sendLine(std::string &line) {
 	return sendFrameAscii(line, '\n');
@@ -80,7 +85,6 @@ bool ConnectionHandler::getFrameAscii(std::string &frame, char delimiter) {
 	try {
 		do {
 			if (!getBytes(&ch, 1)) {
-				std::cout<<"asjdalkjs;dj;asdkj;asdkj;asd";
 				return false;
 			}
 			if (ch != '\0')
