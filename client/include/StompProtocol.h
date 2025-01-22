@@ -13,6 +13,7 @@ private:
     std::string username;
     std::unordered_map<std::string, std::string> subscriptions;
     int reciptId;
+    int logOutId;
 
 public:
     StompProtocol();
@@ -22,6 +23,10 @@ public:
     void setLoggedIn(bool status);
     const std::string &getUsername() const;
     void setUsername(const std::string &user);
+    void setLogOutId(const int logOutId);
+    int getLogOutId();
+    int getReciptId();
+    void setReciptId(const int id);
 
     // Command Processing
     StompFrame processCommand(const std::string &command);
