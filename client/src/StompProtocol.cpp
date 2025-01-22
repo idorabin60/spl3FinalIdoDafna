@@ -120,7 +120,7 @@ std::string getReceiptId(const std::string &serializedFrame)
     {
         // Key not found
         return "";
-    }
+    } // bla
 
     // Move startPos to the position after "receipt-id:"
     startPos += key.length();
