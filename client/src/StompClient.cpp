@@ -10,23 +10,25 @@
 #include "../include/StompProtocol.h"
 #include "../include/ConnectionHandler.h"
 
-// Atomic flag to terminate the threads gracefully
-std::atomic<bool> running(true);
+// Atomic flags for controlling thread lifetimes
+std::atomic<bool> inputRunning(true);
+std::atomic<bool> receiverRunning(true);
 
 // Global ConnectionHandler pointer
 ConnectionHandler *connectionHandler = nullptr;
 
 // Declare receiver thread globally
 std::thread receiverThread;
-std::mutex mtx;
+
+// Global synchronization primitives
 std::condition_variable cv;
-bool messageReceived = false;			   // Flag to indicate if a message is received
-std::atomic<bool> receiptProcessed(false); // To track receipt handling
+std::mutex mtx;
+std::atomic<bool> receiptProcessed(false);
 
 // Receiving Thread: Listens for messages from the server
 void receivingThread(StompProtocol &protocol)
 {
-	while (running)
+	while (receiverRunning)
 	{
 		std::string serverMessage;
 		bool sucsess = connectionHandler->getLine(serverMessage);
@@ -45,9 +47,9 @@ void inputThread()
 	StompProtocol protocol;
 	std::string userInput;
 
-	while (running)
+	while (inputRunning)
 	{
-		std::cout << "please enter a command\n";
+		std::cout << "Please enter a command:\n";
 		std::getline(std::cin, userInput); // Read the user's input
 
 		if (userInput.empty())
@@ -56,9 +58,9 @@ void inputThread()
 			continue;
 		}
 
-		std::istringstream inputStream(userInput); // Create a stream from the input
+		std::istringstream inputStream(userInput);
 		std::string firstWord;
-		inputStream >> firstWord; // Extract the first word
+		inputStream >> firstWord;
 
 		if (firstWord == "login")
 		{
@@ -78,13 +80,14 @@ void inputThread()
 					connectionHandler = new ConnectionHandler(host, portNumber);
 					if (connectionHandler->connect())
 					{
-					
 						if (receiverThread.joinable())
 						{
 							receiverThread.join();
 						}
+						receiverRunning = true; // Restart receiverRunning
 						receiverThread = std::thread(receivingThread, std::ref(protocol));
 						protocol.setLoggedIn(true);
+						std::cout << "STRATING NEW THREAD!!!!!!!!!!!!!!!!!!!!!";
 
 						std::string messageToBeSent = protocol.processCommand(userInput).serialize();
 						connectionHandler->sendFrameAscii(messageToBeSent, '\0');
@@ -98,7 +101,7 @@ void inputThread()
 				}
 				else
 				{
-					std::cout << "login command needs 3 args: {host:port} {username} {password}" << std::endl;
+					std::cout << "Login command needs 3 args: {host:port} {username} {password}" << std::endl;
 				}
 			}
 			else
@@ -109,12 +112,59 @@ void inputThread()
 		else if (firstWord == "exit")
 		{
 			std::cout << "Exiting program..." << std::endl;
-			running = false;
+			inputRunning = false;
+			receiverRunning = false;
+
 			if (receiverThread.joinable())
 			{
 				receiverThread.join();
 			}
 			break;
+		}
+		else if (firstWord == "logout")
+		{
+			if (protocol.isLoggedIn())
+			{
+				receiptProcessed.store(false);
+
+				// Send DISCONNECT frame
+				std::string messageToBeSent = protocol.processCommand(userInput).serialize();
+				connectionHandler->sendFrameAscii(messageToBeSent, '\0');
+
+				// Wait for receipt confirmation
+				{
+					std::unique_lock<std::mutex> lock(mtx);
+					std::cout << "Waiting for receipt confirmation..." << std::endl;
+
+					cv.wait(lock, []
+							{ return receiptProcessed.load(); });
+				}
+
+				std::cout << "Receipt confirmed. Proceeding to logout..." << std::endl;
+
+				// Stop receiver thread
+				std::cout << "Setting receiverRunning to false..." << std::endl;
+				std::cout << "Attempting to join receiver thread..." << std::endl;
+
+				receiverRunning = false;
+				std::cout << "COOOL" << std::endl;
+
+				receiverThread.detach(); // LAST RESORT IDO!!!
+				std::cout << "Receiver thread stopped." << std::endl;
+
+				// Reset protocol state
+				protocol.reset();
+
+				// Delete connection handler
+				delete connectionHandler;
+				connectionHandler = nullptr;
+
+				std::cout << "Logged out successfully." << std::endl;
+			}
+			else
+			{
+				std::cout << "Not logged in." << std::endl;
+			}
 		}
 		else if (firstWord == "join")
 		{
@@ -157,16 +207,6 @@ void inputThread()
 			}
 
 			std::cout << "All events from file " << filePath << " have been sent." << std::endl;
-		}
-		else if (firstWord == "logout")
-		{
-			std::string messageToBeSent = protocol.processCommand(userInput).serialize();
-			connectionHandler->sendFrameAscii(messageToBeSent, '\0');
-		}
-
-		else
-		{
-			std::cout << "Unknown command: " << firstWord << std::endl;
 		}
 	}
 }

@@ -35,6 +35,7 @@ public:
     // Server Response Processing
     void processServerFrame(const StompFrame &frame);
     int incremeantAndGetReciptId();
+    void reset();
 };
 
 #endif // STOMPPROTOCOL_H

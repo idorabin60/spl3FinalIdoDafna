@@ -2,9 +2,17 @@
 #include "event.h"
 #include <iostream>
 #include <sstream>
+#include <condition_variable>
+#include <atomic>
+#include <thread> // Required for std::this_thread::sleep_for
+#include <chrono> // Required for std::chrono::milliseconds
 
-StompProtocol::StompProtocol() : loggedIn(false), username(""), reciptId(0), logOutId(-1) {}
-
+// Declare global variables from the shared file
+extern std::condition_variable cv;
+extern std::mutex mtx;
+extern std::atomic<bool> receiptProcessed;
+StompProtocol::StompProtocol()
+    : loggedIn(false), username(""), reciptId(0), logOutId(-1), subscriptions() {}
 bool StompProtocol::isLoggedIn() const
 {
     return loggedIn;
@@ -61,7 +69,6 @@ StompFrame StompProtocol::processCommand(const std::string &command)
         frame.addHeader("passcode", password);
         incremeantAndGetReciptId();
         setUsername(username);
-        
     }
     else if (action == "join")
     {
@@ -131,36 +138,45 @@ std::string getReceiptId(const std::string &serializedFrame)
     // Extract and return the substring
     return serializedFrame.substr(startPos, endPos - startPos);
 }
-
 void StompProtocol::processServerFrame(const StompFrame &frame)
 {
     const std::string &command = frame.getCommand();
+    std::cout << "SERVER RUNIING";
 
-    // Use `find` to check if the command contains the desired keyword
     if (command.find("CONNECTED") != std::string::npos)
     {
-        std::cout << "Login successful" << std::endl;
+        std::cout << "Login successful\n";
     }
     else if (command.find("MESSAGE") != std::string::npos)
     {
-        std::cout << "Message from server recived " << std::endl;
+        std::cout << "Message from server received.\n";
+        std::cout << frame.serialize() << std::endl;
     }
     else if (command.find("RECEIPT") != std::string::npos)
     {
-        std::cout << "Receipt: " << getReceiptId(frame.serialize()) << std::endl;
-        std::cout<<"log out id: "<< getLogOutId() << std::endl;
-        if (std::stoi(getReceiptId(frame.serialize())) == getLogOutId())
+        std::string receiptId = getReceiptId(frame.serialize());
+        std::cout << "Recipt id: " << receiptId << std::endl;
+        std::cout << "Log out id: " << logOutId << std::endl;
+
+        if (!receiptId.empty() && std::stoi(receiptId) == getLogOutId())
         {
-            setLoggedIn(false);
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                receiptProcessed.store(true);
+            }
+
+            std::cout << "About to notify_all()" << std::endl;
+            cv.notify_all(); // Notify the waiting logout thread
+            std::cout << "Notified all waiting threads" << std::endl;
         }
     }
     else if (command.find("ERROR") != std::string::npos)
     {
-        std::cerr << "Error: " << frame.getBody() << std::endl;
+        std::cerr << "Error: " << frame.getBody() << "\n";
     }
     else
     {
-        std::cerr << "Unknown command received: " << command << std::endl;
+        std::cerr << "Unknown command received: " << command << "\n";
     }
 }
 
@@ -228,4 +244,13 @@ std::vector<StompFrame> StompProtocol::processReportCommand(const std::string &f
 int StompProtocol::incremeantAndGetReciptId()
 {
     return reciptId++;
+}
+void StompProtocol::reset()
+{
+    loggedIn = false;
+    username.clear();
+    reciptId = 0;
+    logOutId = -1;
+    subscriptions.clear();         // Clear all active subscriptions
+    receiptProcessed.store(false); // Reset the receiptProcessed flag
 }
