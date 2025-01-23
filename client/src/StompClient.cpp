@@ -34,11 +34,19 @@ void receivingThread(StompProtocol &protocol)
 		bool sucsess = connectionHandler->getLine(serverMessage);
 		if (!sucsess)
 		{
-			std::cout << "dc";
+			std::cout<<serverMessage<<std::endl;
+			protocol.processServerFrame(serverMessage);
+			std::cout << "An error has been recived logging out from the system";
+			protocol.reset();
+			delete connectionHandler;
+			connectionHandler = nullptr;
 			break;
 		}
-		protocol.processServerFrame(serverMessage);
-	}
+		else
+		{
+			protocol.processServerFrame(serverMessage);
+		}
+	}//bla
 }
 
 // Input Thread: Handles user commands and sends them to the server
@@ -111,15 +119,20 @@ void inputThread()
 		}
 		else if (firstWord == "exit")
 		{
-			std::cout << "Exiting program..." << std::endl;
-			inputRunning = false;
-			receiverRunning = false;
-
-			if (receiverThread.joinable())
-			{
-				receiverThread.join();
+			std::istringstream wordStream(userInput);
+			std::string command, channel;
+			wordStream >> command >> channel;
+			if (!command.empty() && !channel.empty() && wordStream.eof())
+			{ // Check if there are exactly two words
+				std::string messageToBeSent = protocol.processCommand(userInput).serialize();
+				std::cout << messageToBeSent;
+				connectionHandler->sendFrameAscii(messageToBeSent, '\0');
+				std::cout << "Unsubscribe :" << channel << std::endl;
 			}
-			break;
+			else
+			{
+				std::cout << "Error: 'Exit' command must have exactly two words." << std::endl;
+			}
 		}
 		else if (firstWord == "logout")
 		{
@@ -178,8 +191,9 @@ void inputThread()
 			if (!command.empty() && !channel.empty() && wordStream.eof()) // Check if there are exactly two words
 			{
 				std::string messageToBeSent = protocol.processCommand(userInput).serialize();
+				std::cout << messageToBeSent;
 				connectionHandler->sendFrameAscii(messageToBeSent, '\0');
-				std::cout << "join successful " << channel << std::endl;
+				std::cout << "joind :" << channel << std::endl;
 			}
 			else
 			{

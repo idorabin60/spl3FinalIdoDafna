@@ -93,7 +93,7 @@ StompFrame StompProtocol::processCommand(const std::string &command)
         {
             frame.setCommand("UNSUBSCRIBE");
             frame.addHeader("id", it->second);
-            frame.addHeader("receipt", "exit-" + it->second);
+            frame.addHeader("receipt", it->second);
 
             subscriptions.erase(it);
         }
@@ -141,7 +141,8 @@ std::string getReceiptId(const std::string &serializedFrame)
 void StompProtocol::processServerFrame(const StompFrame &frame)
 {
     const std::string &command = frame.getCommand();
-    std::cout << "SERVER RUNIING";
+    std::cout << "SERVER RUNIING"<<std::endl;
+    std::cout<<frame.serialize()<<std::endl;
 
     if (command.find("CONNECTED") != std::string::npos)
     {
