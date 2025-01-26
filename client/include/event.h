@@ -42,8 +42,7 @@ public:
     int get_date_time() const;
     const std::map<std::string, std::string> &get_general_information() const;
     void split_str(const std::string &str, char delimiter, std::vector<std::string> &result);
-    std::string serialize() const;
-    std::string trim(const std::string &s);
+    std::string toString() const;
 };
 
 // Function to parse the JSON file and return a names_and_events object

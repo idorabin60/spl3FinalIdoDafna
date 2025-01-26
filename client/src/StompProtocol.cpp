@@ -162,9 +162,9 @@ void StompProtocol::processServerFrame(const std::string &serverMessage)
         size_t colonPos = line.find(':');
         if (colonPos != std::string::npos)
         {
-            std::string key = line.substr(0, colonPos);
-            std::string value = line.substr(colonPos + 1);
-            headers[trim(key)] = trim(value);
+            std::string key = trim(line.substr(0, colonPos));
+            std::string value = trim(line.substr(colonPos + 1));
+            headers[key] = value;
         }
     }
 
@@ -175,55 +175,50 @@ void StompProtocol::processServerFrame(const std::string &serverMessage)
         bodyStream << line << "\n";
     }
     body = bodyStream.str();
+    // std::cout << "THIS IS THE BODY!" << body << std::endl;
 
-    // Handle different frame types
-    if (command.find("CONNECTED") != std::string::npos)
+    if (command == "MESSAGE")
     {
-        std::cout << "Login successful\n";
-    }
-    else if (command.find("MESSAGE") != std::string::npos)
-    {
-        std::cout << "Message from server received.\n";
+        std::istringstream stream(serverMessage);
+        std::ostringstream result;
+        std::string line;
+        std::getline(stream, line);
 
-        // Extract required headers
-        std::string destination = headers["destination"];
-        std::string user = headers["user"];
-        std::cout << serverMessage << std::endl;
-
-        if (!destination.empty() && !user.empty() && !body.empty())
+        // Process the remaining lines
+        while (std::getline(stream, line))
         {
-            try
+            // Skip the line containing "message-id:"
+            if (line.find("message-id:") != std::string::npos)
             {
-                // Create an Event object from the message body
-                Event event(body);
-
-                // Remove the leading '/' from the destination
-                if (destination[0] == '/')
+                continue;
+            }
+            if (line.find("destination:") != std::string::npos)
+            {
+                size_t pos = line.find("destination:");
+                if (pos != std::string::npos)
                 {
-                    destination = destination.substr(1);
-                }
-
-                // Add the event to the map
-                {
-                    std::lock_guard<std::mutex> lock(eventMapMutex);
-                    eventMap[destination][user].push_back(event);
-
-                    std::cout << "Event added to the map for channel '" << destination
-                              << "' and user '" << user << "'.\n";
+                    line.replace(pos, std::string("destination:").length(), "chanel_name:");
                 }
             }
-            catch (const std::exception &e)
-            {
-                std::cerr << "Error creating Event object: " << e.what() << "\n";
-            }
+            // Append the line to the result
+            result << line << '\n';
         }
-        else
-        {
-            std::cerr << "Invalid MESSAGE frame: missing destination, user, or body.\n";
-        }
-        printEventMap();
+
+        // Output the cleaned result
+        std::string cleanedText = result.str();
+        // std::cout << cleanedText;
+        Event event(cleanedText);
+        std::lock_guard<std::mutex> lock(eventMapMutex);
+        eventMap[event.get_channel_name()][event.getEventOwnerUser()].push_back(event);
+        // std::cout << event.toString();
+        // std::cout << "Event added to channel '" << event.get_channel_name()
+        //           << "' for user '" << event.getEventOwnerUser() << "'.\n";
+        // std::cout << event.serialize();
+        std::cout << "\n";
+        // std::cout << event.get_channel_name();
     }
-    else if (command.find("RECEIPT") != std::string::npos)
+
+    else if (command == "RECEIPT")
     {
         std::string receiptId = headers["receipt-id"];
         std::cout << "Receipt ID: " << receiptId << std::endl;
@@ -237,7 +232,7 @@ void StompProtocol::processServerFrame(const std::string &serverMessage)
             cv.notify_all();
         }
     }
-    else if (command.find("ERROR") != std::string::npos)
+    else if (command == "ERROR")
     {
         std::cerr << "Error: " << body << "\n";
     }
@@ -266,6 +261,7 @@ std::vector<StompFrame> StompProtocol::processReportCommand(const std::string &f
             frame.addHeader("city", event.get_city());
             frame.addHeader("event name", event.get_name());
             frame.addHeader("date time", std::to_string(event.get_date_time()));
+            frame.setBody("description:\n" + event.get_description());
 
             // Format the general information
             std::ostringstream generalInfo;
@@ -294,7 +290,6 @@ std::vector<StompFrame> StompProtocol::processReportCommand(const std::string &f
             frame.addHeader("general information", generalInfo.str());
 
             // Add the description as the body
-            frame.setBody("description:\n" + event.get_description());
 
             // Add the frame to the vector
             frames.push_back(frame);
@@ -304,7 +299,6 @@ std::vector<StompFrame> StompProtocol::processReportCommand(const std::string &f
     {
         std::cerr << "Error processing report: " << e.what() << std::endl;
     }
-
     return frames;
 }
 
@@ -341,63 +335,54 @@ void StompProtocol::summarize(const std::string &channel_name, const std::string
 
     const auto &events = userIt->second;
 
-    // Initialize stats
-    int totalReports = 0;
-    int activeTrueCount = 0;
-    int forcesArrivalTrueCount = 0;
+    // Initialize statistics
+    int totalReports = events.size();
+    int activeCount = 0;
+    int forcesArrivalCount = 0;
 
     std::ostringstream summaryStream;
-    summaryStream << "Channel < " << channel_name << " >\n";
-    summaryStream << "Stats:\n";
+    summaryStream << "Summary for Channel: " << channel_name << " | User: " << user << "\n";
+    summaryStream << "----------------------------------------\n";
 
-    for (const Event &event : events)
+    for (const auto &event : events)
     {
-        totalReports++;
-
+        // Count active and forces arrival flags
         const auto &generalInfo = event.get_general_information();
-        if (generalInfo.find("active") != generalInfo.end() &&
-            generalInfo.at("active") == "true")
+        if (generalInfo.count("active") && generalInfo.at("active") == "true")
         {
-            activeTrueCount++;
+            activeCount++;
         }
-        if (generalInfo.find("forces_arrival_at_scene") != generalInfo.end() &&
-            generalInfo.at("forces_arrival_at_scene") == "true")
+        if (generalInfo.count("forces arrival at scene") && generalInfo.at("forces arrival at scene") == "true")
         {
-            forcesArrivalTrueCount++;
+            forcesArrivalCount++;
         }
 
-        // Format date_time into human-readable format
+        // Format date and time
         std::time_t eventTime = static_cast<time_t>(event.get_date_time());
         std::tm *timeInfo = std::gmtime(&eventTime);
         std::ostringstream dateTimeStream;
         dateTimeStream << std::put_time(timeInfo, "%Y-%m-%d %H:%M:%S");
 
-        // Generate summary from the description
+        // Generate event summary
         std::string description = event.get_description();
-        std::string eventSummary = description.substr(0, std::min(size_t(50), description.size()));
-        if (description.size() > 50)
-        {
-            eventSummary += "...";
-        }
 
-        // Add event report to the summary
-        summaryStream << "Report_" << totalReports << ":\n"
-                      << "  city: " << event.get_city() << "\n"
-                      << "  date time: " << dateTimeStream.str() << "\n"
-                      << "  event name: " << event.get_name() << "\n"
-                      << "  summary: " << eventSummary << "\n";
+        // Add event details to the summary
+        summaryStream << "Event: " << event.get_name() << "\n";
+        summaryStream << "  City: " << event.get_city() << "\n";
+        summaryStream << "  Date: " << dateTimeStream.str() << "\n";
+        summaryStream << "----------------------------------------\n";
     }
 
-    // Add stats to the summary
-    summaryStream << "Total: " << totalReports << "\n";
-    summaryStream << "active: " << activeTrueCount << "\n";
-    summaryStream << "forces arrival at scene: " << forcesArrivalTrueCount << "\n";
+    // Add statistics to the summary
+    summaryStream << "Total Reports: " << totalReports << "\n";
+    summaryStream << "Active: " << activeCount << "\n";
+    summaryStream << "Forces Arrival: " << forcesArrivalCount << "\n";
 
-    // Write to file
+    // Write the summary to a file
     std::ofstream outFile(file);
     if (!outFile)
     {
-        std::cerr << "Error: Could not open file '" << file << "' for writing.\n";
+        std::cerr << "Error: Unable to write summary to file '" << file << "'.\n";
         return;
     }
 
@@ -405,19 +390,4 @@ void StompProtocol::summarize(const std::string &channel_name, const std::string
     outFile.close();
 
     std::cout << "Summary successfully written to '" << file << "'.\n";
-}
-void StompProtocol::printEventMap() const
-{
-    for (const auto &channelPair : eventMap)
-    {
-        std::cout << "Channel: " << channelPair.first << "\n";
-        for (const auto &userPair : channelPair.second)
-        {
-            std::cout << "  User: " << userPair.first << "\n";
-            for (const auto &event : userPair.second)
-            {
-                std::cout << "    Event: " << event.serialize() << "\n";
-            }
-        }
-    }
 }

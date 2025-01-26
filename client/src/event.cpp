@@ -7,124 +7,150 @@
 #include <vector>
 #include <sstream>
 #include <cstring>
-#include <algorithm>
-#include <cctype>
-#include <locale>
+
+// #include "../include/keyboardInput.h"
+#include "event.h"
+
 using namespace std;
 using json = nlohmann::json;
 
-// Constructor
 Event::Event(std::string channel_name, std::string city, std::string name, int date_time,
              std::string description, std::map<std::string, std::string> general_information)
     : channel_name(channel_name), city(city), name(name),
-      date_time(date_time), description(description), general_information(general_information), eventOwnerUser("") {}
+      date_time(date_time), description(description), general_information(general_information), eventOwnerUser("")
+{
+}
 
-// Destructor
-Event::~Event() {}
+Event::~Event()
+{
+}
 
-// Split string by delimiter
+// Member function for splitting a string
 void Event::split_str(const std::string &str, char delimiter, std::vector<std::string> &result)
 {
-    result.clear();
-    std::stringstream ss(str);
+    result.clear();            // Clear the result vector to avoid appending to existing data
+    std::stringstream ss(str); // Use a stringstream to process the string
     std::string item;
 
     while (std::getline(ss, item, delimiter))
     {
-        result.push_back(item);
+        result.push_back(item); // Add each substring to the result vector
     }
 }
 
-// Set the event owner user
 void Event::setEventOwnerUser(std::string setEventOwnerUser)
 {
     eventOwnerUser = setEventOwnerUser;
 }
 
-// Getters
-const std::string &Event::getEventOwnerUser() const { return eventOwnerUser; }
-const std::string &Event::get_channel_name() const { return channel_name; }
-const std::string &Event::get_city() const { return city; }
-const std::string &Event::get_name() const { return name; }
-int Event::get_date_time() const { return date_time; }
-const std::map<std::string, std::string> &Event::get_general_information() const { return general_information; }
-const std::string &Event::get_description() const { return description; }
-
-// Constructor to parse event from a frame body
-std::string Event::trim(const std::string &s)
+const std::string &Event::getEventOwnerUser() const
 {
-    auto start = s.begin();
-    while (start != s.end() && std::isspace(*start))
-    {
-        start++;
-    }
-
-    auto end = s.end();
-    do
-    {
-        end--;
-    } while (std::distance(start, end) > 0 && std::isspace(*end));
-
-    return std::string(start, end + 1);
+    return eventOwnerUser;
 }
-Event::Event(const std::string &frame_body)
-    : channel_name(""), city(""), name(""), date_time(0), description(""), general_information(), eventOwnerUser("")
+
+const std::string &Event::get_channel_name() const
 {
-    std::istringstream stream(frame_body);
-    std::string line;
+    return this->channel_name;
+}
 
-    while (std::getline(stream, line))
+const std::string &Event::get_city() const
+{
+    return this->city;
+}
+
+const std::string &Event::get_name() const
+{
+    return this->name;
+}
+
+int Event::get_date_time() const
+{
+    return this->date_time;
+}
+
+const std::map<std::string, std::string> &Event::get_general_information() const
+{
+    return this->general_information;
+}
+
+const std::string &Event::get_description() const
+{
+    return this->description;
+}
+
+Event::Event(const std::string &frame_body) : channel_name(""), city(""),
+                                              name(""), date_time(0), description(""), general_information(),
+                                              eventOwnerUser("")
+{
+    stringstream ss(frame_body);
+    string line;
+    string eventDescription;
+    map<string, string> general_information_from_string;
+    bool inGeneralInformation = false;
+    while (getline(ss, line, '\n'))
     {
-        size_t colonPos = line.find(':');
-        if (colonPos != std::string::npos)
+        vector<string> lineArgs;
+        if (line.find(':') != string::npos)
         {
-            std::string key = trim(line.substr(0, colonPos));
-            std::string value = trim(line.substr(colonPos + 1));
-
+            split_str(line, ':', lineArgs);
+            string key = lineArgs.at(0);
+            string val;
+            if (lineArgs.size() == 2)
+            {
+                val = lineArgs.at(1);
+            }
             if (key == "user")
-                eventOwnerUser = value;
+            {
+                eventOwnerUser = val;
+            }
+            if (key == "channel name")
+            {
+                channel_name = val;
+            }
+            if (key == "city")
+            {
+                city = val;
+            }
             else if (key == "event name")
-                name = value;
-            else if (key == "city")
-                city = value;
+            {
+                name = val;
+            }
             else if (key == "date time")
-                date_time = std::stoi(value);
+            {
+                date_time = std::stoi(val);
+            }
             else if (key == "general information")
             {
-                // Process subsequent lines as general information
-                while (std::getline(stream, line) && line.find(':') != std::string::npos)
-                {
-                    size_t infoColonPos = line.find(':');
-                    std::string infoKey = trim(line.substr(0, infoColonPos));
-                    std::string infoValue = trim(line.substr(infoColonPos + 1));
-                    general_information[infoKey] = infoValue;
-                }
+                inGeneralInformation = true;
+                continue;
             }
             else if (key == "description")
             {
-                // Process the remaining lines as the description
-                std::ostringstream descStream;
-                descStream << value << "\n";
-                while (std::getline(stream, line))
+                while (getline(ss, line, '\n'))
                 {
-                    descStream << line << "\n";
+                    eventDescription += line + "\n";
                 }
-                description = descStream.str();
-                break; // End parsing after the description
+                description = eventDescription;
+            }
+
+            if (inGeneralInformation)
+            {
+                general_information_from_string[key.substr(1)] = val;
             }
         }
     }
+    general_information = general_information_from_string;
 }
 
-// Parse JSON file into a names_and_events object
 names_and_events parseEventsFile(std::string json_path)
 {
     std::ifstream f(json_path);
     json data = json::parse(f);
 
     std::string channel_name = data["channel_name"];
-    std::vector<Event> events;
 
+    // run over all the events and convert them to Event objects
+    std::vector<Event> events;
     for (auto &event : data["events"])
     {
         std::string name = event["event_name"];
@@ -132,7 +158,6 @@ names_and_events parseEventsFile(std::string json_path)
         int date_time = event["date_time"];
         std::string description = event["description"];
         std::map<std::string, std::string> general_information;
-
         for (auto &update : event["general_information"].items())
         {
             if (update.value().is_string())
@@ -141,13 +166,12 @@ names_and_events parseEventsFile(std::string json_path)
                 general_information[update.key()] = update.value().dump();
         }
 
-        events.emplace_back(channel_name, city, name, date_time, description, general_information);
+        events.push_back(Event(channel_name, city, name, date_time, description, general_information));
     }
+    names_and_events events_and_names{channel_name, events};
 
-    return {channel_name, events};
+    return events_and_names;
 }
-
-// Serialize a names_and_events object to JSON
 std::string serializeNamesAndEvents(const names_and_events &data)
 {
     std::ostringstream oss;
@@ -156,7 +180,25 @@ std::string serializeNamesAndEvents(const names_and_events &data)
     for (size_t i = 0; i < data.events.size(); ++i)
     {
         const Event &event = data.events[i];
-        oss << event.serialize();
+        oss << "{"
+            << "\"name\": \"" << event.get_name() << "\", "
+            << "\"city\": \"" << event.get_city() << "\", "
+            << "\"date_time\": " << event.get_date_time() << ", "
+            << "\"description\": \"" << event.get_description() << "\", "
+            << "\"general_information\": {";
+
+        const auto &general_info = event.get_general_information();
+        for (auto it = general_info.begin(); it != general_info.end(); ++it)
+        {
+            if (it != general_info.begin())
+            {
+                oss << ", ";
+            }
+            oss << "\"" << it->first << "\": \"" << it->second << "\"";
+        }
+
+        oss << "}}";
+
         if (i < data.events.size() - 1)
         {
             oss << ", ";
@@ -164,31 +206,26 @@ std::string serializeNamesAndEvents(const names_and_events &data)
     }
 
     oss << "]}";
+
     return oss.str();
 }
-
-// Serialize an individual Event
-std::string Event::serialize() const
+std::string Event::toString() const
 {
     std::ostringstream oss;
-    oss << "{"
-        << "\"name\": \"" << get_name() << "\", "
-        << "\"city\": \"" << get_city() << "\", "
-        << "\"date_time\": " << get_date_time() << ", "
-        << "\"description\": \"" << get_description() << "\", "
-        << "\"general_information\": {";
 
-    const auto &general_info = get_general_information();
-    for (auto it = general_info.begin(); it != general_info.end(); ++it)
+    oss << "Event Details:\n";
+    oss << "Channel Name: " << channel_name << "\n";
+    oss << "City: " << city << "\n";
+    oss << "Event Name: " << name << "\n";
+    oss << "Date Time: " << date_time << "\n";
+    oss << "Description: " << description << "\n";
+    oss << "Event Owner User: " << eventOwnerUser << "\n";
+
+    oss << "General Information:\n";
+    for (const auto &info : general_information)
     {
-        if (it != general_info.begin())
-        {
-            oss << ", ";
-        }
-        oss << "\"" << it->first << "\": \"" << it->second << "\"";
+        oss << "  " << info.first << ": " << info.second << "\n";
     }
 
-    oss << "}"
-        << "}";
     return oss.str();
 }

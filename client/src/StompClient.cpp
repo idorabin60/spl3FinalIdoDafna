@@ -37,7 +37,6 @@ void receivingThread(StompProtocol &protocol)
 			std::cout << "dc";
 			break;
 		}
-		std::cout << serverMessage;
 		protocol.processServerFrame(serverMessage);
 	}
 }
@@ -199,12 +198,27 @@ void inputThread()
 			for (const StompFrame &frame : frames)
 			{
 				std::string serializedFrame = frame.serialize2();
+				std::cout << serializedFrame << std::endl;
 				connectionHandler->sendFrameAscii(serializedFrame, '\0');
 
 				// Wait for acknowledgment (if needed)
 			}
 
 			std::cout << "All events from file " << filePath << " have been sent." << std::endl;
+		}
+		else if (firstWord == "summarize")
+		{
+			std::string channel, user, file;
+			inputStream >> channel >> user >> file;
+
+			if (!channel.empty() && !user.empty() && !file.empty())
+			{
+				protocol.summarize(channel, user, file);
+			}
+			else
+			{
+				std::cout << "Error: 'summarize' command requires {channel} {user} {file} arguments." << std::endl;
+			}
 		}
 	}
 }
