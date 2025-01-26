@@ -179,43 +179,12 @@ void StompProtocol::processServerFrame(const std::string &serverMessage)
 
     if (command == "MESSAGE")
     {
-        std::istringstream stream(serverMessage);
-        std::ostringstream result;
-        std::string line;
-        std::getline(stream, line);
 
-        // Process the remaining lines
-        while (std::getline(stream, line))
-        {
-            // Skip the line containing "message-id:"
-            if (line.find("message-id:") != std::string::npos)
-            {
-                continue;
-            }
-            if (line.find("destination:") != std::string::npos)
-            {
-                size_t pos = line.find("destination:");
-                if (pos != std::string::npos)
-                {
-                    line.replace(pos, std::string("destination:").length(), "chanel_name:");
-                }
-            }
-            // Append the line to the result
-            result << line << '\n';
-        }
-
-        // Output the cleaned result
-        std::string cleanedText = result.str();
-        // std::cout << cleanedText;
-        Event event(cleanedText);
+        Event event(serverMessage);
         std::lock_guard<std::mutex> lock(eventMapMutex);
+
         eventMap[event.get_channel_name()][event.getEventOwnerUser()].push_back(event);
-        // std::cout << event.toString();
-        // std::cout << "Event added to channel '" << event.get_channel_name()
-        //           << "' for user '" << event.getEventOwnerUser() << "'.\n";
-        // std::cout << event.serialize();
-        std::cout << "\n";
-        // std::cout << event.get_channel_name();
+        std::cout << event.toString();
     }
 
     else if (command == "RECEIPT")
