@@ -5,7 +5,8 @@
 #include <vector>
 
 // Declare the struct before any function or class that uses it
-struct names_and_events {
+struct names_and_events
+{
     std::string channel_name;
     std::vector<class Event> events; // Forward declaration of Event
 };
@@ -16,7 +17,7 @@ class Event
 private:
     // name of channel
     std::string channel_name;
-    // city of the event 
+    // city of the event
     std::string city;
     // name of the event
     std::string name;
@@ -41,6 +42,8 @@ public:
     int get_date_time() const;
     const std::map<std::string, std::string> &get_general_information() const;
     void split_str(const std::string &str, char delimiter, std::vector<std::string> &result);
+    std::string serialize() const;
+    std::string trim(const std::string &s);
 };
 
 // Function to parse the JSON file and return a names_and_events object

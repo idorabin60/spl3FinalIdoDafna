@@ -5,7 +5,8 @@
 #include <unordered_map>
 #include <vector> // Required for std::vector
 #include "StompFrame.h"
-
+#include "event.h"
+#include <mutex>
 class StompProtocol
 {
 private:
@@ -14,6 +15,8 @@ private:
     std::unordered_map<std::string, std::string> subscriptions;
     int reciptId;
     int logOutId;
+    std::unordered_map<std::string, std::unordered_map<std::string, std::vector<Event>>> eventMap;
+    std::mutex eventMapMutex;
 
 public:
     StompProtocol();
@@ -33,9 +36,11 @@ public:
     std::vector<StompFrame> processReportCommand(const std::string &filePath); // Fixed declaration
 
     // Server Response Processing
-    void processServerFrame(const StompFrame &frame);
+    void processServerFrame(const std::string &serverMessage);
     int incremeantAndGetReciptId();
     void reset();
+    void summarize(const std::string &channel_name, const std::string &user, const std::string &file) const;
+    void printEventMap() const;
 };
 
 #endif // STOMPPROTOCOL_H

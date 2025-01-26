@@ -4,15 +4,20 @@
 #include <sstream>
 #include <condition_variable>
 #include <atomic>
-#include <thread> // Required for std::this_thread::sleep_for
-#include <chrono> // Required for std::chrono::milliseconds
+#include <thread>
+#include <chrono>
+#include <fstream>
+#include <iomanip>
+#include <ctime>
+#include <algorithm>
+#include <mutex>
 
 // Declare global variables from the shared file
 extern std::condition_variable cv;
 extern std::mutex mtx;
 extern std::atomic<bool> receiptProcessed;
 StompProtocol::StompProtocol()
-    : loggedIn(false), username(""), reciptId(0), logOutId(-1), subscriptions() {}
+    : loggedIn(false), username(""), reciptId(0), logOutId(-1), subscriptions(), eventMap() {}
 bool StompProtocol::isLoggedIn() const
 {
     return loggedIn;
@@ -138,11 +143,40 @@ std::string getReceiptId(const std::string &serializedFrame)
     // Extract and return the substring
     return serializedFrame.substr(startPos, endPos - startPos);
 }
-void StompProtocol::processServerFrame(const StompFrame &frame)
+void StompProtocol::processServerFrame(const std::string &serverMessage)
 {
-    const std::string &command = frame.getCommand();
-    std::cout << "SERVER RUNIING";
+    std::istringstream stream(serverMessage);
+    std::string line, command;
+    std::unordered_map<std::string, std::string> headers;
+    std::string body;
 
+    // Parse the command (first line of the message)
+    if (std::getline(stream, line))
+    {
+        command = line;
+    }
+
+    // Parse headers
+    while (std::getline(stream, line) && !line.empty())
+    {
+        size_t colonPos = line.find(':');
+        if (colonPos != std::string::npos)
+        {
+            std::string key = line.substr(0, colonPos);
+            std::string value = line.substr(colonPos + 1);
+            headers[trim(key)] = trim(value);
+        }
+    }
+
+    // Parse body
+    std::ostringstream bodyStream;
+    while (std::getline(stream, line))
+    {
+        bodyStream << line << "\n";
+    }
+    body = bodyStream.str();
+
+    // Handle different frame types
     if (command.find("CONNECTED") != std::string::npos)
     {
         std::cout << "Login successful\n";
@@ -150,13 +184,49 @@ void StompProtocol::processServerFrame(const StompFrame &frame)
     else if (command.find("MESSAGE") != std::string::npos)
     {
         std::cout << "Message from server received.\n";
-        std::cout << frame.serialize() << std::endl;
+
+        // Extract required headers
+        std::string destination = headers["destination"];
+        std::string user = headers["user"];
+        std::cout << serverMessage << std::endl;
+
+        if (!destination.empty() && !user.empty() && !body.empty())
+        {
+            try
+            {
+                // Create an Event object from the message body
+                Event event(body);
+
+                // Remove the leading '/' from the destination
+                if (destination[0] == '/')
+                {
+                    destination = destination.substr(1);
+                }
+
+                // Add the event to the map
+                {
+                    std::lock_guard<std::mutex> lock(eventMapMutex);
+                    eventMap[destination][user].push_back(event);
+
+                    std::cout << "Event added to the map for channel '" << destination
+                              << "' and user '" << user << "'.\n";
+                }
+            }
+            catch (const std::exception &e)
+            {
+                std::cerr << "Error creating Event object: " << e.what() << "\n";
+            }
+        }
+        else
+        {
+            std::cerr << "Invalid MESSAGE frame: missing destination, user, or body.\n";
+        }
+        printEventMap();
     }
     else if (command.find("RECEIPT") != std::string::npos)
     {
-        std::string receiptId = getReceiptId(frame.serialize());
-        std::cout << "Recipt id: " << receiptId << std::endl;
-        std::cout << "Log out id: " << logOutId << std::endl;
+        std::string receiptId = headers["receipt-id"];
+        std::cout << "Receipt ID: " << receiptId << std::endl;
 
         if (!receiptId.empty() && std::stoi(receiptId) == getLogOutId())
         {
@@ -164,15 +234,12 @@ void StompProtocol::processServerFrame(const StompFrame &frame)
                 std::lock_guard<std::mutex> lock(mtx);
                 receiptProcessed.store(true);
             }
-
-            std::cout << "About to notify_all()" << std::endl;
-            cv.notify_all(); // Notify the waiting logout thread
-            std::cout << "Notified all waiting threads" << std::endl;
+            cv.notify_all();
         }
     }
     else if (command.find("ERROR") != std::string::npos)
     {
-        std::cerr << "Error: " << frame.getBody() << "\n";
+        std::cerr << "Error: " << body << "\n";
     }
     else
     {
@@ -253,4 +320,104 @@ void StompProtocol::reset()
     logOutId = -1;
     subscriptions.clear();         // Clear all active subscriptions
     receiptProcessed.store(false); // Reset the receiptProcessed flag
+}
+void StompProtocol::summarize(const std::string &channel_name, const std::string &user, const std::string &file) const
+{
+    // Check if the channel exists
+    auto channelIt = eventMap.find(channel_name);
+    if (channelIt == eventMap.end())
+    {
+        std::cerr << "Error: Channel '" << channel_name << "' not found.\n";
+        return;
+    }
+
+    // Check if the user exists within the channel
+    auto userIt = channelIt->second.find(user);
+    if (userIt == channelIt->second.end())
+    {
+        std::cerr << "Error: User '" << user << "' not found in channel '" << channel_name << "'.\n";
+        return;
+    }
+
+    const auto &events = userIt->second;
+
+    // Initialize stats
+    int totalReports = 0;
+    int activeTrueCount = 0;
+    int forcesArrivalTrueCount = 0;
+
+    std::ostringstream summaryStream;
+    summaryStream << "Channel < " << channel_name << " >\n";
+    summaryStream << "Stats:\n";
+
+    for (const Event &event : events)
+    {
+        totalReports++;
+
+        const auto &generalInfo = event.get_general_information();
+        if (generalInfo.find("active") != generalInfo.end() &&
+            generalInfo.at("active") == "true")
+        {
+            activeTrueCount++;
+        }
+        if (generalInfo.find("forces_arrival_at_scene") != generalInfo.end() &&
+            generalInfo.at("forces_arrival_at_scene") == "true")
+        {
+            forcesArrivalTrueCount++;
+        }
+
+        // Format date_time into human-readable format
+        std::time_t eventTime = static_cast<time_t>(event.get_date_time());
+        std::tm *timeInfo = std::gmtime(&eventTime);
+        std::ostringstream dateTimeStream;
+        dateTimeStream << std::put_time(timeInfo, "%Y-%m-%d %H:%M:%S");
+
+        // Generate summary from the description
+        std::string description = event.get_description();
+        std::string eventSummary = description.substr(0, std::min(size_t(50), description.size()));
+        if (description.size() > 50)
+        {
+            eventSummary += "...";
+        }
+
+        // Add event report to the summary
+        summaryStream << "Report_" << totalReports << ":\n"
+                      << "  city: " << event.get_city() << "\n"
+                      << "  date time: " << dateTimeStream.str() << "\n"
+                      << "  event name: " << event.get_name() << "\n"
+                      << "  summary: " << eventSummary << "\n";
+    }
+
+    // Add stats to the summary
+    summaryStream << "Total: " << totalReports << "\n";
+    summaryStream << "active: " << activeTrueCount << "\n";
+    summaryStream << "forces arrival at scene: " << forcesArrivalTrueCount << "\n";
+
+    // Write to file
+    std::ofstream outFile(file);
+    if (!outFile)
+    {
+        std::cerr << "Error: Could not open file '" << file << "' for writing.\n";
+        return;
+    }
+
+    outFile << summaryStream.str();
+    outFile.close();
+
+    std::cout << "Summary successfully written to '" << file << "'.\n";
+}
+void StompProtocol::printEventMap() const
+{
+    for (const auto &channelPair : eventMap)
+    {
+        std::cout << "Channel: " << channelPair.first << "\n";
+        for (const auto &userPair : channelPair.second)
+        {
+            std::cout << "  User: " << userPair.first << "\n";
+            for (const auto &event : userPair.second)
+            {
+                std::cout << "    Event: " << event.serialize() << "\n";
+            }
+        }
+    }
 }

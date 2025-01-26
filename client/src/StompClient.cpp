@@ -37,6 +37,7 @@ void receivingThread(StompProtocol &protocol)
 			std::cout << "dc";
 			break;
 		}
+		std::cout << serverMessage;
 		protocol.processServerFrame(serverMessage);
 	}
 }
@@ -198,9 +199,6 @@ void inputThread()
 			for (const StompFrame &frame : frames)
 			{
 				std::string serializedFrame = frame.serialize2();
-				std::cout << "Sending frame:\n"
-						  << serializedFrame << std::endl;
-
 				connectionHandler->sendFrameAscii(serializedFrame, '\0');
 
 				// Wait for acknowledgment (if needed)
