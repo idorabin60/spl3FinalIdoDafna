@@ -41,6 +41,8 @@ public:
     void reset();
     void summarize(const std::string &channel_name, const std::string &user, const std::string &file) const;
     void printEventMap() const;
+    void handleMessage(std::string serverMessage);
+    void handleRecipt(std::string receiptId);
 };
 
 #endif // STOMPPROTOCOL_H

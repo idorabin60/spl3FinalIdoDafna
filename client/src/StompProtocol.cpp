@@ -149,7 +149,6 @@ void StompProtocol::processServerFrame(const std::string &serverMessage)
     std::string line, command;
     std::unordered_map<std::string, std::string> headers;
     std::string body;
-
     // Parse the command (first line of the message)
     if (std::getline(stream, line))
     {
@@ -179,28 +178,20 @@ void StompProtocol::processServerFrame(const std::string &serverMessage)
 
     if (command == "MESSAGE")
     {
-
-        Event event(serverMessage);
-        std::lock_guard<std::mutex> lock(eventMapMutex);
-
-        eventMap[event.get_channel_name()][event.getEventOwnerUser()].push_back(event);
-        std::cout << event.toString();
+        handleMessage(serverMessage);
     }
 
     else if (command == "RECEIPT")
     {
         std::string receiptId = headers["receipt-id"];
         std::cout << "Receipt ID: " << receiptId << std::endl;
-
-        if (!receiptId.empty() && std::stoi(receiptId) == getLogOutId())
-        {
-            {
-                std::lock_guard<std::mutex> lock(mtx);
-                receiptProcessed.store(true);
-            }
-            cv.notify_all();
-        }
+        handleRecipt(receiptId);
     }
+    else if (command == "CONNECTED")
+    {
+        setLoggedIn(true);
+    }
+
     else if (command == "ERROR")
     {
         std::cerr << "Error: " << body << "\n";
@@ -359,4 +350,23 @@ void StompProtocol::summarize(const std::string &channel_name, const std::string
     outFile.close();
 
     std::cout << "Summary successfully written to '" << file << "'.\n";
+}
+void StompProtocol::handleMessage(std::string serverMessage)
+{
+    Event event(serverMessage);
+    std::lock_guard<std::mutex> lock(eventMapMutex);
+
+    eventMap[event.get_channel_name()][event.getEventOwnerUser()].push_back(event);
+    std::cout << event.toString();
+}
+void StompProtocol::handleRecipt(std::string receiptId)
+{
+    if (!receiptId.empty() && std::stoi(receiptId) == getLogOutId())
+    {
+        {
+            std::lock_guard<std::mutex> lock(mtx);
+            receiptProcessed.store(true);
+        }
+        cv.notify_all();
+    }
 }

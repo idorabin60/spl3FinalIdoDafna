@@ -80,15 +80,9 @@ void inputThread()
 					connectionHandler = new ConnectionHandler(host, portNumber);
 					if (connectionHandler->connect())
 					{
-						if (receiverThread.joinable())
-						{
-							receiverThread.join();
-						}
 						receiverRunning = true; // Restart receiverRunning
 						receiverThread = std::thread(receivingThread, std::ref(protocol));
 						protocol.setLoggedIn(true);
-						std::cout << "STRATING NEW THREAD!!!!!!!!!!!!!!!!!!!!!";
-
 						std::string messageToBeSent = protocol.processCommand(userInput).serialize();
 						connectionHandler->sendFrameAscii(messageToBeSent, '\0');
 					}
@@ -198,7 +192,7 @@ void inputThread()
 			for (const StompFrame &frame : frames)
 			{
 				std::string serializedFrame = frame.serialize2();
-				std::cout << serializedFrame << std::endl;
+				// std::cout << serializedFrame << std::endl;
 				connectionHandler->sendFrameAscii(serializedFrame, '\0');
 
 				// Wait for acknowledgment (if needed)
