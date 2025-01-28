@@ -7,6 +7,7 @@
 #include "StompFrame.h"
 #include "event.h"
 #include <mutex>
+
 class StompProtocol
 {
 private:
@@ -17,6 +18,7 @@ private:
     int logOutId;
     std::unordered_map<std::string, std::unordered_map<std::string, std::vector<Event>>> eventMap;
     std::mutex eventMapMutex;
+    
 
 public:
     StompProtocol();
