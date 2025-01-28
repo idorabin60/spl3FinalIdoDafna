@@ -94,8 +94,8 @@ public class Frame {
     public String toString() {
         return "---------\n" +
                  command + "\n" +
-                 headers + "\n" +
-                 body + "\n -------- \n"
+                headers + "\n" +
+               body + "\n -------- \n"
                 ;
     }
 

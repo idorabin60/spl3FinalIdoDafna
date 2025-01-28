@@ -1,0 +1,41 @@
+Summary for Channel: /police | User: jcole
+----------------------------------------
+Event: Burglary
+  City: Raccoon City
+  Date: 23/12/24 07:45
+  Summary: Suspect broke into a reside...
+----------------------------------------
+Event: Grand Theft Auto
+  City: Liberty City
+  Date: 23/12/24 13:40
+  Summary: Pink Lampadati Felon with l...
+----------------------------------------
+Event: Hit and Run
+  City: Vice City
+  Date: 24/12/24 02:20
+  Summary: Black SUV struck a pedestri...
+----------------------------------------
+Event: Armed Robbery
+  City: Silent Hill
+  Date: 24/12/24 22:15
+  Summary: Two masked suspects armed w...
+----------------------------------------
+Event: Assault
+  City: Pallet Town
+  Date: 25/12/24 21:30
+  Summary: Male suspect assaulted anot...
+----------------------------------------
+Event: Drug Possession Arrest
+  City: Gotham City
+  Date: 26/12/24 06:20
+  Summary: Police apprehended a suspec...
+----------------------------------------
+Event: Vandalism
+  City: Los Alamos
+  Date: 31/12/24 21:40
+  Summary: Multiple cars were spray-pa...
+----------------------------------------
+Stats:
+Total: 7
+Active: 5
+Forces Arrival: 4
