@@ -18,6 +18,7 @@ private:
     int logOutId;
     std::unordered_map<std::string, std::unordered_map<std::string, std::vector<Event>>> eventMap;
     std::mutex eventMapMutex;
+    bool isError;
     
 
 public:
@@ -32,6 +33,8 @@ public:
     int getLogOutId();
     int getReciptId();
     void setReciptId(const int id);
+    void setIsError(bool status);
+    bool getIsError();
 
     // Command Processing
     StompFrame processCommand(const std::string &command);

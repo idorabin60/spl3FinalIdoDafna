@@ -17,10 +17,18 @@ extern std::condition_variable cv;
 extern std::mutex mtx;
 extern std::atomic<bool> receiptProcessed;
 StompProtocol::StompProtocol()
-    : loggedIn(false), username(""), reciptId(0), logOutId(-1), subscriptions(), eventMap() {}
+    : loggedIn(false), username(""), reciptId(0), logOutId(-1), subscriptions(), eventMap(), isError(false) {}
 bool StompProtocol::isLoggedIn() const
 {
     return loggedIn;
+}
+bool StompProtocol::getIsError()
+{
+    return isError;
+}
+void StompProtocol::setIsError(bool status)
+{
+    isError = status;
 }
 
 void StompProtocol::setLoggedIn(bool status)
@@ -98,9 +106,13 @@ StompFrame StompProtocol::processCommand(const std::string &command)
         {
             frame.setCommand("UNSUBSCRIBE");
             frame.addHeader("id", it->second);
-            frame.addHeader("receipt", "exit-" + it->second);
+            frame.addHeader("receipt", std::to_string(incremeantAndGetReciptId()));
 
             subscriptions.erase(it);
+        }
+        else
+        {
+            std::cerr << "Channel '" << channel << "' not found for this user.\n";
         }
     }
 
@@ -194,7 +206,12 @@ void StompProtocol::processServerFrame(const std::string &serverMessage)
 
     else if (command == "ERROR")
     {
-        std::cerr << "Error: " << body << "\n";
+        setIsError(true);
+        for (const auto &pair : headers)
+        {
+            std::cout  << pair.first << " " << pair.second << '\n';
+        }
+        std::cerr << body << "\n";
     }
     else
     {
@@ -274,7 +291,8 @@ void StompProtocol::reset()
     logOutId = -1;
     subscriptions.clear();         // Clear all active subscriptions
     receiptProcessed.store(false); // Reset the receiptProcessed flag
-    eventMap.clear();              // Clear stored events
+    eventMap.clear();
+    setIsError(false); // Clear stored events
 }
 
 void StompProtocol::summarize(const std::string &channel_name, const std::string &user, const std::string &file) const
@@ -283,7 +301,7 @@ void StompProtocol::summarize(const std::string &channel_name, const std::string
     auto channelIt = eventMap.find(channel_name);
     if (channelIt == eventMap.end())
     {
-        std::cerr << "Error: Channel '" << channel_name << "' not found.\n";
+        std::cerr << "Channel '" << channel_name << "' not found.\n";
         return;
     }
 
@@ -291,7 +309,7 @@ void StompProtocol::summarize(const std::string &channel_name, const std::string
     auto userIt = channelIt->second.find(user);
     if (userIt == channelIt->second.end())
     {
-        std::cerr << "Error: User '" << user << "' not found in channel '" << channel_name << "'.\n";
+        std::cerr << "User '" << user << "' not found in channel '" << channel_name << "'.\n";
         return;
     }
 
@@ -344,7 +362,7 @@ void StompProtocol::summarize(const std::string &channel_name, const std::string
     std::ofstream outFile(file);
     if (!outFile)
     {
-        std::cerr << "Error: Unable to write summary to file '" << file << "'.\n";
+        std::cerr << "Unable to write summary to file '" << file << "'.\n";
         return;
     }
 
@@ -365,6 +383,6 @@ void StompProtocol::handleRecipt(std::string receiptId)
 {
     if (!receiptId.empty() && std::stoi(receiptId) == getLogOutId())
     {
-      setLoggedIn(false);
+        setLoggedIn(false);
     }
 }

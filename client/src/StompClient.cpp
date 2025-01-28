@@ -13,6 +13,8 @@
 // Atomic flags for controlling thread lifetimes
 std::atomic<bool> inputRunning(true);
 std::atomic<bool> receiverRunning(true);
+std::mutex mtx;
+std::condition_variable cv;
 
 // Global ConnectionHandler pointer
 ConnectionHandler *connectionHandler = nullptr;
@@ -21,9 +23,8 @@ ConnectionHandler *connectionHandler = nullptr;
 std::thread receiverThread;
 
 // Global synchronization primitives
-std::condition_variable cv;
-std::mutex mtx;
 std::atomic<bool> receiptProcessed(false);
+// ADD WAIT logic
 
 // Receiving Thread: Listens for messages from the server
 void runReceiver(StompProtocol &protocol)
@@ -37,7 +38,15 @@ void runReceiver(StompProtocol &protocol)
 			std::cout << "Disconnected from server.\n";
 			break;
 		}
+
 		protocol.processServerFrame(serverMessage);
+		if (protocol.getIsError() || !protocol.isLoggedIn())
+		{
+			connectionHandler->close();
+			protocol.setLoggedIn(false);
+			protocol.reset();
+			break;
+		}
 	}
 	std::cout << "Receiver thread finished.\n";
 }
@@ -64,6 +73,10 @@ int main(int argc, char *argv[])
 
 		if (firstWord == "login")
 		{
+			if (receiverThread.joinable())
+			{
+				receiverThread.join();
+			}
 			if (!protocol.isLoggedIn())
 			{
 				std::string hostPort, username, password;
@@ -81,10 +94,14 @@ int main(int argc, char *argv[])
 					{
 						receiverRunning = true;
 						receiverThread = std::thread(runReceiver, std::ref(protocol));
-						protocol.setLoggedIn(true);
 
 						std::string messageToBeSent = protocol.processCommand(userInput).serialize();
 						connectionHandler->sendFrameAscii(messageToBeSent, '\0');
+						protocol.setLoggedIn(true);
+						std::cout<<"login sent"<<std::endl;
+
+						// ADD WAIT
+
 						std::cout << "Login successful.\n";
 					}
 					else
@@ -113,7 +130,8 @@ int main(int argc, char *argv[])
 				// Send DISCONNECT frame
 				std::string messageToBeSent = protocol.processCommand(userInput).serialize();
 				connectionHandler->sendFrameAscii(messageToBeSent, '\0');
-				// Stop receiver thread and clean up connection
+				// ADD WAIT
+				//  Stop receiver thread and clean up connection
 				if (receiverThread.joinable())
 				{
 					receiverRunning = false;
@@ -138,23 +156,14 @@ int main(int argc, char *argv[])
 
 		else if (firstWord == "exit")
 		{
-			std::cout << "Exiting program...\n";
-			inputRunning = false;
+			if (protocol.isLoggedIn()){
+				std::string messageToBeSent = protocol.processCommand(userInput).serialize();
+				connectionHandler->sendFrameAscii(messageToBeSent, '\0');
 
-			// Stop receiver thread and clean up connection
-			if (receiverThread.joinable())
-			{
-				receiverRunning = false;
-				receiverThread.join();
+			}else{
+				std::cout<<"You must be logged in to exit"<<std::endl;
 			}
-
-			if (connectionHandler != nullptr)
-			{
-				connectionHandler->close();
-				delete connectionHandler;
-				connectionHandler = nullptr;
-			}
-			break;
+			
 		}
 		else if (firstWord == "join")
 		{
@@ -167,6 +176,7 @@ int main(int argc, char *argv[])
 				{
 					std::string messageToBeSent = protocol.processCommand(userInput).serialize();
 					connectionHandler->sendFrameAscii(messageToBeSent, '\0');
+					// ADD WAIT
 					std::cout << "join successful " << channel << std::endl;
 				}
 				else
@@ -193,6 +203,7 @@ int main(int argc, char *argv[])
 					for (const StompFrame &frame : frames)
 					{
 						std::string serializedFrame = frame.serialize2();
+						std::cout << "Sending frame: " << serializedFrame << std::endl;
 						connectionHandler->sendFrameAscii(serializedFrame, '\0');
 					}
 
