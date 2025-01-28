@@ -38,7 +38,7 @@ void runReceiver(StompProtocol &protocol)
 			std::cout << "Disconnected from server.\n";
 			break;
 		}
-
+		std::cout<<serverMessage<<std::endl;
 		protocol.processServerFrame(serverMessage);
 		if (protocol.getIsError() || !protocol.isLoggedIn())
 		{
@@ -96,6 +96,7 @@ int main(int argc, char *argv[])
 						receiverThread = std::thread(runReceiver, std::ref(protocol));
 
 						std::string messageToBeSent = protocol.processCommand(userInput).serialize();
+						std::cout<<messageToBeSent<<"RON ZAKAI"<<std::endl;
 						connectionHandler->sendFrameAscii(messageToBeSent, '\0');
 						protocol.setLoggedIn(true);
 						std::cout<<"login sent"<<std::endl;
@@ -203,7 +204,6 @@ int main(int argc, char *argv[])
 					for (const StompFrame &frame : frames)
 					{
 						std::string serializedFrame = frame.serialize2();
-						std::cout << "Sending frame: " << serializedFrame << std::endl;
 						connectionHandler->sendFrameAscii(serializedFrame, '\0');
 					}
 
@@ -217,6 +217,23 @@ int main(int argc, char *argv[])
 			else
 			{
 				std::cout << "You must be logged in to send a report.\n";
+			}
+		}
+			else if (firstWord == "summary")
+		{
+
+			std::string channel, user, file;
+			inputStream >> channel >> user >> file;
+			channel.insert(0,1,'/');
+			protocol.printEventMap();
+
+			if (!channel.empty() && !user.empty() && !file.empty())
+			{
+				protocol.summarize(channel, user, file);
+			}
+			else
+			{
+				std::cout << "Error: 'summarize' command requires {channel} {user} {file} arguments." << std::endl;
 			}
 		}
 		else

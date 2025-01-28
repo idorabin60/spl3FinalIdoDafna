@@ -45,9 +45,13 @@ public:
     int incremeantAndGetReciptId();
     void reset();
     void summarize(const std::string &channel_name, const std::string &user, const std::string &file) const;
-    void printEventMap() const;
+    void printEventMap();
     void handleMessage(std::string serverMessage);
     void handleRecipt(std::string receiptId);
+    void processMessageFinal(std::vector<std::string> args);
+    std::vector<std::string> splitLine(const std::string& line);
+    std::vector<std::string> splitFrameToLines(const std::string& frame);
 };
+
 
 #endif // STOMPPROTOCOL_H
