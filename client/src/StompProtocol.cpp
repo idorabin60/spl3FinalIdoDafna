@@ -365,10 +365,6 @@ void StompProtocol::handleRecipt(std::string receiptId)
 {
     if (!receiptId.empty() && std::stoi(receiptId) == getLogOutId())
     {
-        {
-            std::lock_guard<std::mutex> lock(mtx);
-            receiptProcessed.store(true);
-        }
-        cv.notify_all();
+      setLoggedIn(false);
     }
 }
