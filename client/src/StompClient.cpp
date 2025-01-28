@@ -39,7 +39,9 @@ void runReceiver(StompProtocol &protocol)
         }
         protocol.processServerFrame(serverMessage);
     }
+    std::cout << "Receiver thread finished.\n";
 }
+
 
 int main(int argc, char *argv[])
 {
@@ -114,42 +116,44 @@ int main(int argc, char *argv[])
             break;
         }
         else if (firstWord == "logout")
+{
+    if (protocol.isLoggedIn())
+    {
+        receiptProcessed.store(false);
+
+        // Send DISCONNECT frame
+        std::string messageToBeSent = protocol.processCommand(userInput).serialize();
+		std::cout<<messageToBeSent;
+        connectionHandler->sendFrameAscii(messageToBeSent, '\0');
+
+        // Wait for receipt confirmation
         {
-            if (protocol.isLoggedIn())
-            {
-                receiptProcessed.store(false);
-
-                // Send DISCONNECT frame
-                std::string messageToBeSent = protocol.processCommand(userInput).serialize();
-                connectionHandler->sendFrameAscii(messageToBeSent, '\0');
-
-                // Wait for receipt confirmation
-                {
-                    std::unique_lock<std::mutex> lock(mtx);
-                    std::cout << "Waiting for receipt confirmation..." << std::endl;
-                    cv.wait(lock, [] { return receiptProcessed.load(); });
-                }
-
-                std::cout << "Receipt confirmed. Proceeding to logout..." << std::endl;
-
-                if (receiverThread.joinable())
-                {
-                    receiverRunning = false;
-                    receiverThread.join();
-                }
-
-                protocol.reset();
-
-                delete connectionHandler;
-                connectionHandler = nullptr;
-
-                std::cout << "Logged out successfully." << std::endl;
-            }
-            else
-            {
-                std::cout << "Not logged in." << std::endl;
-            }
+            std::unique_lock<std::mutex> lock(mtx);
+            std::cout << "Waiting for receipt confirmation..." << std::endl;
+            cv.wait(lock, [] { return receiptProcessed.load(); });
         }
+
+        std::cout << "Receipt confirmed. Proceeding to logout..." << std::endl;
+
+        // Close the connection for this client
+        if (connectionHandler != nullptr)
+        {
+            connectionHandler->close();
+            delete connectionHandler;
+            connectionHandler = nullptr;
+        }
+
+        // Reset protocol state for the client
+        protocol.reset();
+
+        std::cout << "Logged out successfully. Program continues running..." << std::endl;
+    }
+    else
+    {
+        std::cout << "Not logged in. Nothing to log out." << std::endl;
+    }
+}
+
         else if (firstWord == "join")
         {
             std::istringstream wordStream(userInput);

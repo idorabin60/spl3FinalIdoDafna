@@ -274,7 +274,9 @@ void StompProtocol::reset()
     logOutId = -1;
     subscriptions.clear();         // Clear all active subscriptions
     receiptProcessed.store(false); // Reset the receiptProcessed flag
+    eventMap.clear();              // Clear stored events
 }
+
 void StompProtocol::summarize(const std::string &channel_name, const std::string &user, const std::string &file) const
 {
     // Check if the channel exists
