@@ -5,7 +5,6 @@ import bgu.spl.net.srv.Server;
 public class StompServer {
 
     public static void main(String[] args) {
-        System.err.println("Hello Dafna");
         if (args.length < 2) {
             System.err.println("Usage: java -jar StompServer.jar <port> <reactor/tpc>");
             return;

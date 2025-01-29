@@ -27,7 +27,7 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<Frame>
 
     @Override
     public void process(Frame frame) {
-        System.out.println("----Dafna that the frame you recive from the client:----- " + frame.toString());
+        System.out.println("----That the frame you recive from the client:----- " + frame.toString());
         if (frame.getCommand().equalsIgnoreCase("CONNECT")) {
             handleConnectFrame(frame);
         } else if (frame.getCommand().equalsIgnoreCase("DISCONNECT")) {
@@ -38,10 +38,6 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<Frame>
             handleUnSubscribeFrame(frame);
         } else if (frame.getCommand().equalsIgnoreCase("SEND")) {
             handleSendFrame(frame);
-        }
-
-        else {
-            System.out.println("Unknown command: " + frame.getCommand());
         }
     }
 
@@ -145,68 +141,6 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<Frame>
             }
         }
     }
-    // String[] datafields = {"user", "destination", "event_name", "city",
-    // "date_time", "description",
-    // "general_information", "active", "forces_arrival_at_scene"};
-    // ConcurrentHashMap<String, String> frameData = new ConcurrentHashMap<>();
-    // List<String> frameHeadersList = Arrays.asList(datafields);
-    // String frameString = frame.toString();
-    // // Create the frameData map
-    // // Parse the given frame string
-    // String content = frameString.substring(frameString.indexOf("{") + 1,
-    // frameString.lastIndexOf("}")); // Extract content inside {}
-    // String[] pairs = content.split(","); // Split by comma for key-value pairs
-
-    // for (String pair : pairs) {
-    // String[] keyValue = pair.split("=", 2); // Split each pair by '='
-    // String key = keyValue[0].trim();
-    // String value = keyValue.length > 1 ? keyValue[1].trim() : "";
-
-    // // Add to frameData if the key is valid
-    // if (frameHeadersList.contains(key)) {
-    // frameData.put(key, value);
-    // } else {
-    // frameData.put("missing_key", key); // Handle unexpected keys
-    // }
-    // }
-
-    // Frame messageFrame = new Frame("MESSAGE", null,null);
-    // String subscriptionId=
-    // connections.getTopics().get(channelName).get(connectionId);
-    // messageFrame.addHeader("subscription", subscriptionId);
-    // messageFrame.addHeader("user", frameData.get("user"));
-    // String messageId = connections.getAndIncreceMessageId() +"";
-    // messageFrame.addHeader("message-id", messageId);
-    // messageFrame.addHeader("destination", frameData.get("destination"));
-    // messageFrame.addHeader("event_name", frameData.get("event_name"));
-    // messageFrame.addHeader("city", frameData.get("city"));
-    // messageFrame.addHeader("date_time", frameData.get("date_time"));
-    // messageFrame.addHeader("description", frameData.get("description"));
-    // messageFrame.addHeader("general_information",
-    // frameData.get("general_information"));
-    // messageFrame.addHeader("active", frameData.get("active"));
-    // messageFrame.addHeader("forces_arrival_at_scene",
-    // frameData.get("forces_arrival_at_scene"));
-
-    // System.out.println("---The one you send----" +messageFrame.toString());
-    // connections.send(channelName, messageFrame);
-    // sendReceiptFrameIfNeeded(frame);
-    // }
-    // String subscriptionId=
-    // connections.getTopics().get(channelName).get(connectionId);
-    // messageFrame.addHeader("subscription", subscriptionId);
-    // String messageId = connections.getAndIncreceMessageId() +"";
-    // messageFrame.addHeader("message-id",messageId);
-    // messageFrame.addHeader("destination", channelName);
-    // String theWholeHeadrs="";
-    // for (Map.Entry<String, String> entry : frame.getHeaders().entrySet()) {
-    // theWholeHeadrs=theWholeHeadrs+entry.getKey()+":"+entry.getValue()+"\n";
-    // }
-    // messageFrame.setBody(theWholeHeadrs+""+frame.getBody());
-    // connections.send(channelName, messageFrame);
-    // sendReceiptFrameIfNeeded(frame);
-    // }
-    // }
 
     private void handleDisconnectFrame(Frame frame) {
         sendReceiptFrameIfNeeded(frame);
@@ -223,8 +157,6 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<Frame>
                 loginTestsSucced = false;
                 sendErrorAndClose(frame, "User is already logged in.");
             } else {
-                System.out.println("Dafna you receach here:" + passward + " the pass in the map:"
-                        + connections.getPassward(userName));
                 if (!passward.equals(connections.getPassward(userName))) {
                     loginTestsSucced = false;
                     sendErrorAndClose(frame, "Wrong password.");
@@ -259,7 +191,7 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<Frame>
         errorFrame.addHeader("Error Description:", errorDescription);
         errorFrame.setBody("----------\n" + frame.toString() + "----------\n");
         if (!connections.send(connectionId, errorFrame)) {
-            System.out.println("ERROR????????????");
+            System.out.println("Network disconnection");
         }
         sendReceiptFrameIfNeeded(errorFrame);
         gracefulShoutDown();

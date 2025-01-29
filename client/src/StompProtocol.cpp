@@ -87,14 +87,20 @@ StompFrame StompProtocol::processCommand(const std::string &command)
     {
         std::string channel;
         iss >> channel;
-
-        std::string subscriptionId = std::to_string(subscriptions.size() + 1);
-        frame.setCommand("SUBSCRIBE");
-        frame.addHeader("destination", "/" + channel);
-        frame.addHeader("id", subscriptionId);
-        frame.addHeader("receipt", std::to_string(incremeantAndGetReciptId()));
-
-        subscriptions[channel] = subscriptionId;
+        if (subscriptions.find(channel) != subscriptions.end())
+        {
+            std::cerr << "Channel '" << channel << "' already joined.\n";
+        }
+        else
+        {
+            std::string subscriptionId = std::to_string(subscriptions.size() + 1);
+            frame.setCommand("SUBSCRIBE");
+            frame.addHeader("destination", "/" + channel);
+            frame.addHeader("id", subscriptionId);
+            frame.addHeader("receipt", std::to_string(incremeantAndGetReciptId()));
+            subscriptions[channel] = subscriptionId;
+        }
+        return frame;
     }
     else if (action == "exit")
     {
@@ -196,7 +202,6 @@ void StompProtocol::processServerFrame(const std::string &serverMessage)
     else if (command == "RECEIPT")
     {
         std::string receiptId = headers["receipt-id"];
-        std::cout << "Receipt ID: " << receiptId << std::endl;
         handleRecipt(receiptId);
     }
     else if (command == "CONNECTED")
@@ -209,7 +214,7 @@ void StompProtocol::processServerFrame(const std::string &serverMessage)
         setIsError(true);
         for (const auto &pair : headers)
         {
-            std::cout  << pair.first << " " << pair.second << '\n';
+            std::cout << pair.first << " " << pair.second << '\n';
         }
         std::cerr << body << "\n";
     }
@@ -221,7 +226,7 @@ void StompProtocol::processServerFrame(const std::string &serverMessage)
 
 std::vector<StompFrame> StompProtocol::processReportCommand(const std::string &filePath)
 {
-    int counter =0;
+    int counter = 0;
 
     try
     {
@@ -273,7 +278,6 @@ std::vector<StompFrame> StompProtocol::processReportCommand(const std::string &f
             frames.push_back(frame);
             counter++;
         }
-        std::cout<<"LOOK HERE YA HOMO"<<counter<<std::endl;
         return frames;
     }
     catch (const std::exception &e)
@@ -319,16 +323,17 @@ void StompProtocol::summarize(const std::string &channel_name, const std::string
     auto events = userIt->second;
 
     // Sort events by date_time, then by event_name lexicographically
-    std::sort(events.begin(), events.end(), [](const Event &a, const Event &b) {
+    std::sort(events.begin(), events.end(), [](const Event &a, const Event &b)
+              {
         if (a.get_date_time() == b.get_date_time())
             return a.get_name() < b.get_name();
-        return a.get_date_time() < b.get_date_time();
-    });
+        return a.get_date_time() < b.get_date_time(); });
 
     // Initialize statistics
     int totalReports = events.size();
     int activeCount = 0;
     int forcesArrivalCount = 0;
+    int eventCounter = 1;
 
     std::ostringstream summaryStream;
     summaryStream << "Summary for Channel: " << channel_name << " | User: " << user << "\n";
@@ -336,6 +341,7 @@ void StompProtocol::summarize(const std::string &channel_name, const std::string
 
     for (const auto &event : events)
     {
+        summaryStream << "Report_" << eventCounter++ << "\n";
         // Count active and forces arrival flags
         const auto &generalInfo = event.get_general_information();
         if (generalInfo.count("active") && generalInfo.at("active") == "true")
@@ -393,7 +399,7 @@ void StompProtocol::handleMessage(std::string serverMessage)
     std::lock_guard<std::mutex> lock(eventMapMutex);
     std::vector<std::string> args = splitFrameToLines(serverMessage);
     processMessageFinal(args);
-    
+
     // Event event(serverMessage);
     // std::lock_guard<std::mutex> lock(eventMapMutex);
     // std::string chanelName = event.get_channel_name();
@@ -413,96 +419,117 @@ void StompProtocol::handleRecipt(std::string receiptId)
 }
 void StompProtocol::printEventMap()
 {
-   std::cout << "Top-level keys in eventMap:" << std::endl;
-    for (const auto& pair : eventMap) {
+    for (const auto &pair : eventMap)
+    {
         std::cout << pair.first << std::endl;
     }
 }
 
-void StompProtocol::processMessageFinal(std::vector<std::string> args) {
-    std::unordered_map<std::string, std::string> argMap;
-    for (const std::string& arg : args) {
-        size_t pos = arg.find(':');
-        if (pos != std::string::npos) {
-            std::string key = arg.substr(0, pos);
-            std::string value = arg.substr(pos + 1);
-            argMap[key] = value;
+void StompProtocol::processMessageFinal(std::vector<std::string> messageParts)
+{
+    std::unordered_map<std::string, std::string> keyValueStore;
+
+    // Parsing key-value pairs from input
+    for (const std::string &segment : messageParts)
+    {
+        size_t delimiterPos = segment.find(':');
+        if (delimiterPos != std::string::npos)
+        {
+            std::string keyField = segment.substr(0, delimiterPos);
+            std::string valueField = segment.substr(delimiterPos + 1);
+            keyValueStore[keyField] = valueField;
         }
     }
 
-    // Check if all required keys exist in the map
-    if (argMap.find("user") == argMap.end() ||
-        argMap.find("destination") == argMap.end() ||
-        argMap.find("event_name") == argMap.end() ||
-        argMap.find("city") == argMap.end() ||
-        argMap.find("date_time") == argMap.end() ||
-        argMap.find("description") == argMap.end() ||
-        argMap.find("general_information") == argMap.end() ||
-        argMap.find("active") == argMap.end() ||
-        argMap.find("forces_arrival_at_scene") == argMap.end()) {
-        std::cerr << "Error: Missing required fields in the message" << std::endl;
+    // Ensuring all mandatory fields exist
+    if (keyValueStore.count("user") == 0 || keyValueStore.count("destination") == 0 ||
+        keyValueStore.count("event_name") == 0 || keyValueStore.count("city") == 0 ||
+        keyValueStore.count("date_time") == 0 || keyValueStore.count("description") == 0 ||
+        keyValueStore.count("general_information") == 0 || keyValueStore.count("active") == 0 ||
+        keyValueStore.count("forces_arrival_at_scene") == 0)
+    {
+        std::cerr << "Error: Required message fields are missing." << std::endl;
         return;
     }
 
-    std::string user = argMap["user"];
-    std::string destination = argMap["destination"];
-    std::string event_name = argMap["event_name"];
-    std::string city = argMap["city"];
-    int date_time = std::stoi(argMap["date_time"]);
-    std::string description = argMap["description"];
-    std::string general_information = argMap["general_information"];
-    std::string active = argMap["active"];
-    std::string forces_arrival_at_scene = argMap["forces_arrival_at_scene"];
+    // Extracting values from the parsed data
+    std::string userID = keyValueStore["user"];
+    std::string targetDestination = keyValueStore["destination"];
+    std::string eventTitle = keyValueStore["event_name"];
+    std::string eventCity = keyValueStore["city"];
+    int eventTimestamp = std::stoi(keyValueStore["date_time"]);
+    std::string eventDescription = keyValueStore["description"];
+    std::string eventGeneralInfo = keyValueStore["general_information"];
+    std::string eventStatus = keyValueStore["active"];
+    std::string arrivalTimeInfo = keyValueStore["forces_arrival_at_scene"];
 
-    std::map<std::string, std::string> general_info_map;
-    general_info_map["general_information"] = general_information;
-    general_info_map["active"] = active;
-    general_info_map["forces_arrival_at_scene"] = forces_arrival_at_scene;
+    // Storing general event-related details
+    std::map<std::string, std::string> metadata;
+    metadata["general_information"] = eventGeneralInfo;
+    metadata["active"] = eventStatus;
+    metadata["forces_arrival_at_scene"] = arrivalTimeInfo;
 
-    Event event(destination, city, event_name, date_time, description, general_info_map);
-    event.setEventOwnerUser(user);
-    std::string channel = event.get_channel_name();
-    if (eventMap.find(channel) == eventMap.end()) {
-        eventMap[channel] = {};
+    // Creating and storing the event
+    Event newEvent(targetDestination, eventCity, eventTitle, eventTimestamp, eventDescription, metadata);
+    newEvent.setEventOwnerUser(userID);
+    std::string channelKey = newEvent.get_channel_name();
+
+    if (eventMap.find(channelKey) == eventMap.end())
+    {
+        eventMap[channelKey] = {};
     }
-    eventMap[channel][user].push_back(event);
+    eventMap[channelKey][userID].push_back(newEvent);
 }
 
-std::vector<std::string> StompProtocol :: splitLine(const std::string& line) {
-    std::vector<std::string> args = {};
-    std::string word = "";
-    for(char c : line) {
-        if(c == ' ' or c == ':') {
-            args.push_back(word);
-            word = "";
+std::vector<std::string> StompProtocol::splitLine(const std::string &textLine)
+{
+    std::vector<std::string> tokens;
+    std::string tokenBuffer = "";
+
+    for (char currentChar : textLine)
+    {
+        if (currentChar == ' ' || currentChar == ':')
+        {
+            tokens.push_back(tokenBuffer);
+            tokenBuffer = "";
         }
-        else {
-            word += c;
+        else
+        {
+            tokenBuffer += currentChar;
         }
     }
-    args.push_back(word);
-    return args;
+
+    tokens.push_back(tokenBuffer);
+    return tokens;
 }
 
-std::vector<std::string> StompProtocol::splitFrameToLines(const std::string& frame) {
-    std::vector<std::string> args;
-    std::string line = "";
-    for(char c : frame) {
-        if(c == '\0') {
-            return args;
-        }
-        if(c == '\n') {
-            args.push_back(line);
-            line = "";
-        }
-        else {
-            line += c;
-        }
-    }
-    // Handle the case where the frame does not end with a newline
-    if (!line.empty()) {
-        args.push_back(line);
-    }
-    return args;
-}
+std::vector<std::string> StompProtocol::splitFrameToLines(const std::string &rawFrame)
+{
+    std::vector<std::string> extractedLines;
+    std::string lineBuffer = "";
 
+    for (char frameChar : rawFrame)
+    {
+        if (frameChar == '\0')
+        {
+            return extractedLines;
+        }
+        if (frameChar == '\n')
+        {
+            extractedLines.push_back(lineBuffer);
+            lineBuffer = "";
+        }
+        else
+        {
+            lineBuffer += frameChar;
+        }
+    }
+
+    // Append the last collected line if it's not empty
+    if (!lineBuffer.empty())
+    {
+        extractedLines.push_back(lineBuffer);
+    }
+
+    return extractedLines;
+}
