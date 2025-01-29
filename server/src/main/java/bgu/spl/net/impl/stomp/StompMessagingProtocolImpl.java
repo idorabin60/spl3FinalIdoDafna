@@ -27,7 +27,7 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<Frame>
 
     @Override
     public void process(Frame frame) {
-        System.out.println("----Dafna that the frame you recive from the client:----- " + frame.toString());
+        System.out.println("----That the frame you recive from the client:----- " + frame.toString());
         if (frame.getCommand().equalsIgnoreCase("CONNECT")) {
             handleConnectFrame(frame);
         } else if (frame.getCommand().equalsIgnoreCase("DISCONNECT")) {
@@ -38,10 +38,6 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<Frame>
             handleUnSubscribeFrame(frame);
         } else if (frame.getCommand().equalsIgnoreCase("SEND")) {
             handleSendFrame(frame);
-        }
-
-        else {
-            System.out.println("Unknown command: " + frame.getCommand());
         }
     }
 
@@ -161,8 +157,6 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<Frame>
                 loginTestsSucced = false;
                 sendErrorAndClose(frame, "User is already logged in.");
             } else {
-                System.out.println("Dafna you receach here:" + passward + " the pass in the map:"
-                        + connections.getPassward(userName));
                 if (!passward.equals(connections.getPassward(userName))) {
                     loginTestsSucced = false;
                     sendErrorAndClose(frame, "Wrong password.");
@@ -197,7 +191,7 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<Frame>
         errorFrame.addHeader("Error Description:", errorDescription);
         errorFrame.setBody("----------\n" + frame.toString() + "----------\n");
         if (!connections.send(connectionId, errorFrame)) {
-            System.out.println("ERROR????????????");
+            System.out.println("Network disconnection");
         }
         sendReceiptFrameIfNeeded(errorFrame);
         gracefulShoutDown();

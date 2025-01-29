@@ -92,10 +92,11 @@ public class Frame {
     // For debugging purposes
     @Override
     public String toString() {
-        return "---------\n" +
+        return
+                 "\n" +
                  command + "\n" +
                 headers + "\n" +
-               body + "\n -------- \n"
+               body + "\n"
                 ;
     }
 

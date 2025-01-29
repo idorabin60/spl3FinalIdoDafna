@@ -47,7 +47,7 @@ public class ConnectionsImpl<T> implements Connections<T> {
         ConcurrentHashMap<Integer, String> subscribers = topics.get(channel);
         System.out.println(subscribers.size());
         if (msg instanceof Frame) {
-            System.out.println("Dafna this is the message you broadcast:" + msg.toString());
+            System.out.println("-----This is the message that broadcast:" + msg.toString());
         }
         ConnectionHandler<T> client; 
         if (subscribers != null) {
@@ -84,7 +84,6 @@ public class ConnectionsImpl<T> implements Connections<T> {
       System.out.println("--MapAllUsers map after dissconnest--\n" + mapAllUsers.toString());
         ConnectionHandler<T> handler = connectionHandlers.remove(connectionId);
         if (handler != null) {
-            System.out.println("i reach her handler!=null");
             try {
                 handler.close(); // Close the connection handler
             } catch (IOException e) {

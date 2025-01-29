@@ -38,7 +38,6 @@ void runReceiver(StompProtocol &protocol)
 			std::cout << "Disconnected from server.\n";
 			break;
 		}
-		std::cout<<serverMessage<<std::endl;
 		protocol.processServerFrame(serverMessage);
 		if (protocol.getIsError() || !protocol.isLoggedIn())
 		{
@@ -96,7 +95,6 @@ int main(int argc, char *argv[])
 						receiverThread = std::thread(runReceiver, std::ref(protocol));
 
 						std::string messageToBeSent = protocol.processCommand(userInput).serialize();
-						std::cout<<messageToBeSent<<"RON ZAKAI"<<std::endl;
 						connectionHandler->sendFrameAscii(messageToBeSent, '\0');
 						protocol.setLoggedIn(true);
 						std::cout<<"login sent"<<std::endl;
