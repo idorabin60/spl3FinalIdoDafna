@@ -47,7 +47,7 @@ public class ConnectionsImpl<T> implements Connections<T> {
         ConcurrentHashMap<Integer, String> subscribers = topics.get(channel);
         System.out.println(subscribers.size());
         if (msg instanceof Frame) {
-            System.out.println("Dafna this is the message you broadcast:" + msg.toString());
+            System.out.println("-----This is the message that broadcast:" + msg.toString());
         }
         ConnectionHandler<T> client; 
         if (subscribers != null) {
@@ -84,7 +84,6 @@ public class ConnectionsImpl<T> implements Connections<T> {
       System.out.println("--MapAllUsers map after dissconnest--\n" + mapAllUsers.toString());
         ConnectionHandler<T> handler = connectionHandlers.remove(connectionId);
         if (handler != null) {
-            System.out.println("i reach her handler!=null");
             try {
                 handler.close(); // Close the connection handler
             } catch (IOException e) {
@@ -139,59 +138,8 @@ public class ConnectionsImpl<T> implements Connections<T> {
         }    
         
       
-        //         helperTopics.computeIfAbsent(connectionId, key -> new ConcurrentHashMap<>()).put(subscriptionId, channelName);
-
-        // }
-        // else { //The channel name already exsits 
-        //         topics.computeIfAbsent(channelName, key -> new ConcurrentHashMap<>()).put(connectionId, subscriptionId);      
-        //         helperTopics.computeIfAbsent(connectionId, key -> new ConcurrentHashMap<>()).put(subscriptionId, channelName);
-          
-        // }
               System.out.println("--Topics map--\n" + topics.toString());
              System.out.println("--helperTopics map--\n" + helperTopics.toString());
-
-
-
-        //מימוש שלא שומר את ה subId החדש
-        // if (topics.get(channelName)==null){
-        //     //new channel 
-        //     topics.computeIfAbsent(channelName, key -> new ConcurrentHashMap<>()).put(connectionId, subscriptionId);      
-        //         helperTopics.computeIfAbsent(connectionId, key -> new ConcurrentHashMap<>()).put(subscriptionId, channelName);
-
-        // }
-        // else { //The channel name already exsits 
-        //     if (topics.get(channelName).get(connectionId)==null){
-        //         topics.computeIfAbsent(channelName, key -> new ConcurrentHashMap<>()).put(connectionId, subscriptionId);      
-        //         helperTopics.computeIfAbsent(connectionId, key -> new ConcurrentHashMap<>()).put(subscriptionId, channelName);
-        //     }
-        // }
-        //       System.out.println("--Topics map--\n" + topics.toString());
-        //      System.out.println("--helperTopics map--\n" + helperTopics.toString());
-
-    //    // Check if the topic already exists
-    //    if (topics.get(channelName)==null){
-    //     topics.computeIfAbsent(channelName, key -> new ConcurrentHashMap<>());
-    //    }
-    //    if (topics.get(channelName).get(connectionId)==null){
-    //    topics.get(channelName).put(connectionId, subscriptionId);
-    //    }
-    //     if (helperTopics.get(connectionId)==null){
-    //         helperTopics.put(connectionId,new ConcurrentHashMap<>());
-    //         helperTopics.get(connectionId).put(subscriptionId, channelName);
-    //     }
-    //    else {
-    //     //The client take care is the client already subscribed
-    //     topics.get(channelName).put(connectionId, subscriptionId);
-    //     if (helperMapClientsNameAndId.get(connectionId)==null){
-    //         helperTopics.put(connectionId,new ConcurrentHashMap<>());
-    //         helperTopics.get(connectionId).put(subscriptionId, channelName);
-    //     }
-    //     else {
-    //         helperTopics.get(connectionId).put(subscriptionId, channelName);
-    //     }
-    //    }
-    //     System.out.println("--Topics map--\n" + topics.toString());
-    //     System.out.println("--helperTopics map--\n" + helperTopics.toString());
     }
 
     public void removeSubscription(int coneectionId, String subscriptionId) {

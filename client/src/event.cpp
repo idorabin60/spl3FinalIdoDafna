@@ -103,7 +103,7 @@ Event::Event(const std::string &frame_body) : channel_name(""), city(""),
             {
                 eventOwnerUser = val;
             }
-            if (key == "channel name")
+            if (key == "destination")
             {
                 channel_name = val;
             }
@@ -135,7 +135,7 @@ Event::Event(const std::string &frame_body) : channel_name(""), city(""),
 
             if (inGeneralInformation)
             {
-                general_information_from_string[key.substr(1)] = val;
+                general_information_from_string[key.substr(0)] = val;
             }
         }
     }
